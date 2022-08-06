@@ -1,24 +1,33 @@
 package dev.slimevr.autobone;
 
+import java.io.File;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Future;
+import java.util.concurrent.locks.ReentrantLock;
+
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.tuple.Pair;
+
+import com.jme3.math.Vector3f;
+
 import dev.slimevr.VRServer;
 import dev.slimevr.autobone.AutoBone.AutoBoneResults;
 import dev.slimevr.autobone.errors.AutoBoneException;
+import dev.slimevr.poserecorder.PoseFrameIO;
+import dev.slimevr.poserecorder.PoseFrameSkeleton;
 import dev.slimevr.poserecorder.PoseFrameTracker;
 import dev.slimevr.poserecorder.PoseFrames;
 import dev.slimevr.poserecorder.PoseRecorder;
 import dev.slimevr.poserecorder.TrackerFrame;
 import dev.slimevr.poserecorder.TrackerFrameData;
+import dev.slimevr.posestreamer.BVHFileStream;
+import dev.slimevr.posestreamer.PoseStreamer;
 import dev.slimevr.vr.processor.skeleton.SkeletonConfig;
 import dev.slimevr.vr.processor.skeleton.SkeletonConfigOffsets;
 import io.eiren.util.StringUtils;
 import io.eiren.util.collections.FastList;
 import io.eiren.util.logging.LogManager;
-import org.apache.commons.lang3.tuple.Pair;
-
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Future;
-import java.util.concurrent.locks.ReentrantLock;
 
 
 public class AutoBoneHandler {
@@ -322,6 +331,120 @@ public class AutoBoneHandler {
 
 				List<PoseFrameTracker> trackers = recording.getValue().getTrackers();
 
+				File autoboneRecordingDir = new File("Recordings");
+				autoboneRecordingDir.mkdirs();
+
+				// Remove the first number of frames
+				if (false) {
+					int framesToTrim = 41;
+					boolean saveTrimmed = true;
+
+					for (PoseFrameTracker tracker : trackers) {
+						if (tracker == null)
+							continue;
+
+						for (int i = 0; i < framesToTrim; i++) {
+							tracker.removeFrame(0);
+						}
+					}
+
+					if (saveTrimmed) {
+						PoseFrameIO
+							.writeToFile(
+								new File(autoboneRecordingDir, recording.getKey() + "_trimmed.pfr"),
+								recording.getValue()
+							);
+					}
+				}
+
+				// Isolate specific frames
+				if (false) {
+					int[] framesToKeep = new int[] {
+						166,
+						370,
+					};
+					boolean saveIsolated = true;
+
+					for (PoseFrameTracker tracker : trackers) {
+						if (tracker == null)
+							continue;
+
+						for (int i = tracker.getFrameCount() - 1; i >= 0; i--) {
+							if (ArrayUtils.contains(framesToKeep, i))
+								continue;
+
+							tracker.removeFrame(i);
+						}
+					}
+
+					if (saveIsolated) {
+						PoseFrameIO
+							.writeToFile(
+								new File(
+									autoboneRecordingDir,
+									recording.getKey() + "_isolated.pfr"
+								),
+								recording.getValue()
+							);
+					}
+				}
+
+				// Offset the recording position
+				if (false) {
+					Vector3f offset = new Vector3f(0.0641426444f, 1.94856906f, 1.15352106f);
+					boolean saveOffset = true;
+
+					for (PoseFrameTracker tracker : trackers) {
+						if (tracker == null)
+							continue;
+
+						for (int i = 0; i < tracker.getFrameCount(); i++) {
+							TrackerFrame frame = tracker.safeGetFrame(i);
+							if (frame != null && frame.hasPosition()) {
+								frame.position.addLocal(offset);
+							}
+						}
+					}
+
+					if (saveOffset) {
+						PoseFrameIO
+							.writeToFile(
+								new File(autoboneRecordingDir, recording.getKey() + "_offset.pfr"),
+								recording.getValue()
+							);
+					}
+				}
+
+				// Remove specific tracker positions
+				if (false) {
+					TrackerPosition[] positions = new TrackerPosition[] {
+						TrackerPosition.HIP
+					};
+					boolean saveWithoutTrackers = true;
+
+					for (int i = trackers.size() - 1; i >= 0; i--) {
+						PoseFrameTracker tracker = trackers.get(i);
+						if (tracker == null)
+							continue;
+
+						if (ArrayUtils.contains(positions, tracker.getBodyPosition())) {
+							trackers.remove(i);
+							tracker.clearFrames();
+						}
+					}
+
+					if (saveWithoutTrackers) {
+						PoseFrameIO
+							.writeToFile(
+								new File(
+									autoboneRecordingDir,
+									recording.getKey() + "_without_trackers.pfr"
+								),
+								recording.getValue()
+							);
+					}
+				}
+
 				StringBuilder trackerInfo = new StringBuilder();
 				for (PoseFrameTracker tracker : trackers) {
 					if (tracker == null)
@@ -352,8 +475,36 @@ public class AutoBoneHandler {
 					);
 
 				AutoBoneResults autoBoneResults = processFrames(recording.getValue());
-				heightPercentError.add(autoBoneResults.getHeightDifference());
+				heightPercentError.add(autoBoneResults.getHeightOffset());
 				LogManager.info("[AutoBone] Done processing!");
+
+				// Generate BVH for AutoBone recording
+				if (true) {
+					PoseFrameSkeleton skeleton = new PoseFrameSkeleton(trackers, null);
+					skeleton
+						.getSkeletonConfig()
+						.setConfigs(autoBoneResults.configValues, null, null);
+					PoseStreamer streamer = new PoseStreamer(skeleton);
+
+					File bvhFolder = new File("BVH Recordings");
+					bvhFolder.mkdirs();
+					try (
+						BVHFileStream bvhFileStream = new BVHFileStream(
+							new File(bvhFolder, recording.getKey() + ".bvh")
+						)
+					) {
+						long sampleRate = autoBone.getConfig().sampleRateMs;
+						streamer.setOutput(bvhFileStream, sampleRate);
+
+						for (int i = 0; i < recording.getValue().getMaxFrameCount(); i++) {
+							skeleton.setCursor(i);
+							skeleton.updatePose();
+							streamer.captureFrame();
+						}
+
+						streamer.closeOutput();
+					}
+				}
 
 				// #region Stats/Values
 				skeletonConfigBuffer.setConfigs(autoBoneResults.configValues, null, null);

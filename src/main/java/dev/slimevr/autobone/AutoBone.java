@@ -400,34 +400,21 @@ public class AutoBone {
 
 	public float getTargetHeight(PoseFrames frames) {
 		float targetHeight;
-		// Get the current skeleton from the server
-		Skeleton skeleton = getSkeleton();
-		if (skeleton != null) {
-			// If there is a skeleton available, calculate the target height
-			// from its configs
-			targetHeight = sumSelectConfigs(legacyHeightConfigs, skeleton.getSkeletonConfig());
+
+		// max HMD height from the recording
+		float hmdHeight = frames.getMaxHmdHeight();
+		if (hmdHeight <= 0.50f) {
 			LogManager
 				.warning(
-					"[AutoBone] Target height loaded from skeleton (Make sure you reset before running!): "
-						+ targetHeight
+					"[AutoBone] Max headset height detected (Value seems too low, did you not stand up straight while measuring?): "
+						+ hmdHeight
 				);
 		} else {
-			// Otherwise if there is no skeleton available, attempt to get the
-			// max HMD height from the recording
-			float hmdHeight = frames.getMaxHmdHeight();
-			if (hmdHeight <= 0.50f) {
-				LogManager
-					.warning(
-						"[AutoBone] Max headset height detected (Value seems too low, did you not stand up straight while measuring?): "
-							+ hmdHeight
-					);
-			} else {
-				LogManager.info("[AutoBone] Max headset height detected: " + hmdHeight);
-			}
-
-			// Estimate target height from HMD height
-			targetHeight = hmdHeight;
+			LogManager.info("[AutoBone] Max headset height detected: " + hmdHeight);
 		}
+
+		// Estimate target height from HMD height
+		targetHeight = hmdHeight;
 
 		return targetHeight;
 	}
@@ -891,8 +878,12 @@ public class AutoBone {
 			this.configValues = configValues;
 		}
 
+		public float getHeightOffset() {
+			return finalHeight - targetHeight;
+		}
+
 		public float getHeightDifference() {
-			return FastMath.abs(targetHeight - finalHeight);
+			return FastMath.abs(getHeightOffset());
 		}
 	}
 }
