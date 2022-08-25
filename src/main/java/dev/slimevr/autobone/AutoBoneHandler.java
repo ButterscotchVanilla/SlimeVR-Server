@@ -25,6 +25,7 @@ import dev.slimevr.posestreamer.BVHFileStream;
 import dev.slimevr.posestreamer.PoseStreamer;
 import dev.slimevr.vr.processor.skeleton.SkeletonConfig;
 import dev.slimevr.vr.processor.skeleton.SkeletonConfigOffsets;
+import dev.slimevr.vr.trackers.TrackerPosition;
 import io.eiren.util.StringUtils;
 import io.eiren.util.collections.FastList;
 import io.eiren.util.logging.LogManager;
