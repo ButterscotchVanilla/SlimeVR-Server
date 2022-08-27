@@ -20,9 +20,11 @@ import org.apache.commons.lang3.tuple.Pair;
 
 import java.io.File;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Random;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -94,8 +96,6 @@ public class AutoBone {
 	public PositionError positionError = new PositionError();
 	public PositionOffsetError positionOffsetError = new PositionOffsetError();
 	// #endregion
-
-	private final Random rand = new Random();
 
 	private final AutoBoneConfig config;
 
@@ -432,24 +432,12 @@ public class AutoBone {
 		return targetHeight;
 	}
 
-	public AutoBoneResults processFrames(PoseFrames frames, Consumer<Epoch> epochCallback)
-		throws AutoBoneException {
-		return processFrames(frames, -1f, epochCallback);
-	}
-
-	public AutoBoneResults processFrames(
-		PoseFrames frames,
-		float targetHeight,
-		Consumer<Epoch> epochCallback
-	) throws AutoBoneException {
-		return processFrames(frames, true, targetHeight, epochCallback);
-	}
-
 	public AutoBoneResults processFrames(
 		PoseFrames frames,
 		boolean calcInitError,
 		float targetHeight,
-		Consumer<Epoch> epochCallback
+		Consumer<Epoch> epochCallback,
+		ConcurrentHashMap<SkeletonConfigValues, Float> skeletonConfigValues
 	) throws AutoBoneException {
 		final int frameCount = frames.getMaxFrameCount();
 
@@ -465,6 +453,11 @@ public class AutoBone {
 			trackers,
 			null
 		);
+
+		for (Entry<SkeletonConfigValues, Float> entry : skeletonConfigValues.entrySet()) {
+			skeleton1.skeletonConfig.setValue(entry.getKey(), entry.getValue());
+			skeleton2.skeletonConfig.setValue(entry.getKey(), entry.getValue());
+		}
 
 		EnumMap<BoneType, Float> intermediateOffsets = new EnumMap<BoneType, Float>(
 			offsets
@@ -483,6 +476,7 @@ public class AutoBone {
 			targetHeight = getTargetHeight(frames);
 		}
 
+		final Random rand = new Random(5);
 		float avgError = -1f;
 
 		// Epoch loop, each epoch is one full iteration over the full dataset
@@ -691,7 +685,8 @@ public class AutoBone {
 
 			// Calculate average error over the epoch
 			avgError = errorCount > 0 ? sumError / errorCount : -1f;
-			LogManager.info("[AutoBone] Epoch " + (epoch + 1) + " average error: " + avgError);
+			// LogManager.info("[AutoBone] Epoch " + (epoch + 1) + " average
+			// error: " + avgError);
 
 			applyConfig(legacyConfigs);
 			if (epochCallback != null) {

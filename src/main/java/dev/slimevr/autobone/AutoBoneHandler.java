@@ -1,7 +1,10 @@
 package dev.slimevr.autobone;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Future;
 import java.util.concurrent.locks.ReentrantLock;
@@ -25,6 +28,7 @@ import dev.slimevr.posestreamer.BVHFileStream;
 import dev.slimevr.posestreamer.PoseStreamer;
 import dev.slimevr.vr.processor.skeleton.SkeletonConfig;
 import dev.slimevr.vr.processor.skeleton.SkeletonConfigOffsets;
+import dev.slimevr.vr.processor.skeleton.SkeletonConfigValues;
 import dev.slimevr.vr.trackers.TrackerPosition;
 import io.eiren.util.StringUtils;
 import io.eiren.util.collections.FastList;
@@ -97,7 +101,10 @@ public class AutoBoneHandler {
 		return autoBone.getLengthsString();
 	}
 
-	private AutoBoneResults processFrames(PoseFrames frames) throws AutoBoneException {
+	private AutoBoneResults processFrames(
+		PoseFrames frames,
+		ConcurrentHashMap<SkeletonConfigValues, Float> skeletonConfigValues
+	) throws AutoBoneException {
 		return autoBone
 			.processFrames(
 				frames,
@@ -107,7 +114,8 @@ public class AutoBoneHandler {
 					listeners.forEach(listener -> {
 						listener.onAutoBoneEpoch(epoch);
 					});
-				}
+				},
+				skeletonConfigValues
 			);
 	}
 
@@ -332,7 +340,7 @@ public class AutoBoneHandler {
 
 				List<PoseFrameTracker> trackers = recording.getValue().getTrackers();
 
-				File autoboneRecordingDir = new File("Recordings");
+				File autoboneRecordingDir = new File("AutoBone Recordings");
 				autoboneRecordingDir.mkdirs();
 
 				// Remove the first number of frames
@@ -391,8 +399,8 @@ public class AutoBoneHandler {
 				}
 
 				// Offset the recording position
-				if (false) {
-					Vector3f offset = new Vector3f(0.0641426444f, 1.94856906f, 1.15352106f);
+				if (true) {
+					Vector3f offset = new Vector3f(2.6f, -0.20f, -0.6f);
 					boolean saveOffset = true;
 
 					for (PoseFrameTracker tracker : trackers) {
@@ -475,7 +483,44 @@ public class AutoBoneHandler {
 							+ "]"
 					);
 
-				AutoBoneResults autoBoneResults = processFrames(recording.getValue());
+				HyperparamTuning<SkeletonConfigValues> tuning = new HyperparamTuning<SkeletonConfigValues>();
+				for (SkeletonConfigValues configVal : SkeletonConfigValues.values) {
+					tuning.addHyperparameter(configVal, configVal.defaultValue);
+				}
+
+				ConcurrentHashMap<SkeletonConfigValues, Float> skeletonConfigValues = tuning.tune(params -> {
+					try {
+						AutoBone autoBoneThread = new AutoBone(server);
+						AutoBoneResults autoBoneResults = autoBoneThread
+							.processFrames(
+								recording.getValue(),
+								autoBoneThread.getConfig().calcInitError,
+								autoBoneThread.getConfig().targetHeight,
+								(epoch) -> {
+									listeners.forEach(listener -> {
+										listener.onAutoBoneEpoch(epoch);
+									});
+								},
+								params
+							);
+						LogManager.info("[AutoBone] Final error: " + autoBoneResults.epochError);
+						return autoBoneResults.epochError;
+					} catch (AutoBoneException e) {
+						e.printStackTrace();
+					}
+					return 100000f;
+				});
+
+				for (Entry<SkeletonConfigValues, Float> entry : skeletonConfigValues.entrySet()) {
+					LogManager
+						.info("Config \"" + entry.getKey() + "\" end value: " + entry.getValue());
+				}
+
+				AutoBoneResults autoBoneResults = processFrames(
+					recording.getValue(),
+					skeletonConfigValues
+				);
+				LogManager.info("[AutoBone] Last final error: " + autoBoneResults.epochError);
 				heightPercentError.add(autoBoneResults.getHeightOffset());
 				LogManager.info("[AutoBone] Done processing!");
 
