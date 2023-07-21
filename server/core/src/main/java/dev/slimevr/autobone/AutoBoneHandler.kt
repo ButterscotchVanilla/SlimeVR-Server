@@ -1,25 +1,38 @@
 package dev.slimevr.autobone
 
+import com.jme3.math.FastMath
 import dev.slimevr.VRServer
 import dev.slimevr.autobone.AutoBone.AutoBoneResults
 import dev.slimevr.autobone.AutoBone.Companion.loadDir
 import dev.slimevr.autobone.errors.AutoBoneException
+import dev.slimevr.poseframeformat.PoseFrameIO
 import dev.slimevr.poseframeformat.PoseFrames
 import dev.slimevr.poseframeformat.PoseRecorder
 import dev.slimevr.poseframeformat.PoseRecorder.RecordingProgress
+import dev.slimevr.poseframeformat.trackerdata.TrackerFrame
 import dev.slimevr.poseframeformat.trackerdata.TrackerFrameData
 import dev.slimevr.poseframeformat.trackerdata.TrackerFrames
+import dev.slimevr.posestreamer.BVHFileStream
+import dev.slimevr.posestreamer.PoseFrameStreamer
 import dev.slimevr.tracking.processor.config.SkeletonConfigManager
 import dev.slimevr.tracking.processor.config.SkeletonConfigOffsets
+import dev.slimevr.tracking.trackers.TrackerPosition
 import io.eiren.util.StringUtils
 import io.eiren.util.collections.FastList
 import io.eiren.util.logging.LogManager
+import io.github.axisangles.ktmath.EulerAngles
+import io.github.axisangles.ktmath.EulerOrder
+import io.github.axisangles.ktmath.Quaternion
+import io.github.axisangles.ktmath.Vector3
+import org.apache.commons.lang3.ArrayUtils
 import org.apache.commons.lang3.tuple.Pair
+import java.io.File
 import java.util.*
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.thread
 import kotlin.concurrent.withLock
+import kotlin.math.*
 
 class AutoBoneHandler(private val server: VRServer) {
 	private val poseRecorder: PoseRecorder = PoseRecorder(server)
@@ -99,6 +112,23 @@ class AutoBoneHandler(private val server: VRServer) {
 		try {
 			if (poseRecorder.isReadyToRecord) {
 				announceProcessStatus(AutoBoneProcessType.RECORD, "Recording...")
+
+				// region ### Debug processing options ###
+				// Whether to skip the recording process to make debugging faster
+				val skipRecording = true
+				// endregion
+
+				// region ### Debug processing ###
+				if (skipRecording) {
+					announceProcessStatus(
+						AutoBoneProcessType.RECORD,
+						"Skipped recording.",
+						completed = true,
+						success = true
+					)
+					return
+				}
+				// endregion
 
 				// ex. 1000 samples at 20 ms per sample is 20 seconds
 				val sampleCount = autoBone.globalConfig.sampleCount
@@ -269,12 +299,271 @@ class AutoBoneHandler(private val server: VRServer) {
 			val skeletonConfigManagerBuffer = SkeletonConfigManager(false)
 			for ((key, value) in frameRecordings) {
 				LogManager.info("[AutoBone] Processing frames from \"$key\"...")
+				val trackers = value.frameHolders
+
+				val autoboneRecordingDir = File("AutoBone Recordings")
+				autoboneRecordingDir.mkdirs()
+
+				// region ### Debug processing options ###
+				// Remove the first number of frames
+				val trimFrames = false
+				// Isolate specific frames
+				val isolateFrames = false
+				// Offset the recording position
+				val offsetPositions = false
+				// Rotate all trackers with
+				val offsetRotations = false
+				// Remove specific tracker positions
+				val removeTrackersByPosition = false
+				// Offset HMD timing
+				val offsetHmdTiming = false
+
+				// Generate BVH for AutoBone recording
+				val generateBvh = true
+				// Use the AutoBone adjusted proportions for the BVH recording
+				val useAdjustmentsForBvh = true
+				// endregion
+
+				// region ### Debug processing ###
+				if (trimFrames) {
+					val framesToTrim = 41
+					val saveTrimmed = true
+					for (tracker in trackers) {
+						if (tracker == null) continue
+						for (i in 0 until framesToTrim) {
+							tracker.frames.removeAt(0)
+						}
+					}
+					if (saveTrimmed) {
+						PoseFrameIO
+							.writeToFile(
+								File(
+									autoboneRecordingDir,
+									"${key}_trimmed.pfr"
+								),
+								value
+							)
+					}
+				}
+
+				// Isolate specific frames
+				if (isolateFrames) {
+					val framesToKeep = intArrayOf(
+						166,
+						370
+					)
+					val saveIsolated = true
+					for (tracker in trackers) {
+						if (tracker == null) continue
+						for (i in tracker.frames.size - 1 downTo 0) {
+							if (ArrayUtils.contains(framesToKeep, i)) continue
+							tracker.frames.removeAt(i)
+						}
+					}
+					if (saveIsolated) {
+						PoseFrameIO
+							.writeToFile(
+								File(
+									autoboneRecordingDir,
+									"${key}_isolated.pfr"
+								),
+								value
+							)
+					}
+				}
+
+				// Offset the recording position
+				if (offsetPositions) {
+					val offset = Vector3(0.0641426444f, 1.94856906f, 1.15352106f)
+					val saveOffset = true
+					for (tracker in trackers) {
+						if (tracker == null) continue
+						for (i in 0 until tracker.frames.size) {
+							val frame: TrackerFrame = tracker.tryGetFrame(i) ?: continue
+							if (frame.hasPosition()) {
+								// Create a new frame with the offset position
+								val newFrame =
+									TrackerFrame(
+										frame.tryGetTrackerPosition(),
+										frame.tryGetRotation(),
+										frame.tryGetPosition()?.plus(offset),
+										frame.tryGetAcceleration(),
+										frame.tryGetRawRotation()
+									)
+
+								// Replace the frame with an edited one
+								tracker.frames.removeAt(i)
+								tracker.frames.add(i, newFrame)
+							}
+						}
+					}
+					if (saveOffset) {
+						PoseFrameIO
+							.writeToFile(
+								File(
+									autoboneRecordingDir,
+									"${key}_offset.pfr"
+								),
+								value
+							)
+					}
+				}
+
+				// Rotate all trackers with exceptions
+				if (offsetRotations) {
+					val keepRotationPositions: Array<TrackerPosition> =
+						arrayOf(
+							TrackerPosition.HEAD,
+							TrackerPosition.HIP,
+							TrackerPosition.LEFT_FOOT,
+							TrackerPosition.RIGHT_FOOT
+						)
+					val rotation: Quaternion =
+						EulerAngles(EulerOrder.YZX, 0f, FastMath.PI, 0f)
+							.toQuaternion()
+					val saveRotated = true
+					for (tracker in trackers) {
+						if (tracker == null) continue
+						for (i in 0 until tracker.frames.size) {
+							val frame: TrackerFrame = tracker.tryGetFrame(i) ?: continue
+							if (frame.hasRotation() && !ArrayUtils
+								.contains(
+										keepRotationPositions,
+										frame.tryGetTrackerPosition()
+									)
+							) {
+								// Create a new frame with the offset rotation
+								val oldTrackerRotation = frame.tryGetRotation()
+								val newTrackerRotation =
+									if (oldTrackerRotation != null) {
+										rotation.times(oldTrackerRotation)
+											.times(rotation)
+									} else {
+										null
+									}
+								val newFrame =
+									TrackerFrame(
+										frame.tryGetTrackerPosition(),
+										newTrackerRotation,
+										frame.tryGetPosition(),
+										frame.tryGetAcceleration(),
+										frame.tryGetRawRotation()
+									)
+
+								// Replace the frame with an edited one
+								tracker.frames.removeAt(i)
+								tracker.frames.add(i, newFrame)
+							}
+						}
+					}
+					if (saveRotated) {
+						PoseFrameIO
+							.writeToFile(
+								File(
+									autoboneRecordingDir,
+									"${key}_rotated.pfr"
+								),
+								value
+							)
+					}
+				}
+
+				// Remove specific tracker positions
+				if (removeTrackersByPosition) {
+					val positions: Array<TrackerPosition> = arrayOf(
+						TrackerPosition.HIP
+					)
+					val saveWithoutTrackers = true
+					for (i in trackers.size - 1 downTo 0) {
+						val tracker = trackers[i] ?: continue
+						if (ArrayUtils.contains(
+								positions,
+								tracker.tryGetFirstNotNullFrame()
+									?.tryGetTrackerPosition()
+							)
+						) {
+							trackers.removeAt(i)
+							tracker.frames.clear()
+						}
+					}
+					if (saveWithoutTrackers) {
+						PoseFrameIO
+							.writeToFile(
+								File(
+									autoboneRecordingDir,
+									"${key}_without_trackers.pfr"
+								),
+								value
+							)
+					}
+				}
+
+				// Offset HMD timing
+				if (offsetHmdTiming) {
+					val framesToOffset = 20
+					val saveHmdTimingOffset = true
+					val posFramesToOffset = abs(framesToOffset)
+					for (tracker in trackers) {
+						if (tracker == null ||
+							// Use a logical XOR, if it's positive, it needs to skip all
+							// but the HMD tracker, if it's negative, then it needs to
+							// skip only the HMD
+							(
+								(framesToOffset >= 0) xor
+									(
+										tracker.tryGetFirstNotNullFrame()?.tryGetTrackerPosition() ==
+											TrackerPosition.HEAD
+										)
+								)
+						) {
+							continue
+						}
+						for (i in 0 until posFramesToOffset) {
+							tracker.frames.removeAt(0)
+						}
+					}
+					if (saveHmdTimingOffset) {
+						PoseFrameIO
+							.writeToFile(
+								File(
+									autoboneRecordingDir,
+									"${key}_hmd_timing_offset.pfr"
+								),
+								value
+							)
+					}
+				}
+				// endregion
+
 				// Output tracker info for the recording
 				printTrackerInfo(value.frameHolders)
 
 				// Actually process the recording
 				val autoBoneResults = processFrames(value)
 				LogManager.info("[AutoBone] Done processing!")
+
+				// region ### Debug BVH generation ###
+				// Generate BVH for AutoBone recording
+				if (generateBvh) {
+					val streamer = PoseFrameStreamer(value)
+					if (useAdjustmentsForBvh) {
+						autoBoneResults.configValues.forEach {
+								(key: SkeletonConfigOffsets, newLength: Float?) ->
+							streamer.humanPoseManager.setOffset(key, newLength)
+						}
+					}
+					val bvhFolder = File("BVH Recordings")
+					bvhFolder.mkdirs()
+					BVHFileStream(
+						File(bvhFolder, "$key.bvh")
+					).use { bvhFileStream ->
+						val sampleRate = autoBone.globalConfig.sampleRateMs
+						streamer.setOutput(bvhFileStream, sampleRate)
+						streamer.streamAllFrames()
+						streamer.closeOutput()
+					}
+				}
+				// endregion
 
 				// #region Stats/Values
 				// Accumulate height error
