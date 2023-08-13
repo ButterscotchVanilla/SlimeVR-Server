@@ -198,13 +198,17 @@ class AutoBone(server: VRServer) {
 		// Load current values for adjustable configs
 		loadConfigValues()
 
+		// region ### Debug processing options ###
+		val enableConfigHeight = false
+		// endregion
+
 		// Set the target heights either from config or calculate them
-		val targetHmdHeight = if (config.targetHmdHeight > 0f) {
+		val targetHmdHeight = if (enableConfigHeight && config.targetHmdHeight > 0f) {
 			config.targetHmdHeight
 		} else {
 			calcTargetHmdHeight(frames, config)
 		}
-		val targetFullHeight = if (config.targetFullHeight > 0f) {
+		val targetFullHeight = if (enableConfigHeight && config.targetFullHeight > 0f) {
 			config.targetFullHeight
 		} else {
 			targetHmdHeight / BodyProportionError.eyeHeightToHeightRatio
