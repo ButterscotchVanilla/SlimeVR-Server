@@ -237,8 +237,12 @@ class AutoBone(private val server: VRServer) {
 		// Load current values for adjustable configs
 		loadConfigValues()
 
+		// region ### Debug processing options ###
+		val enableConfigHeight = true
+		// endregion
+
 		// Set the target heights either from config or calculate them
-		val targetHmdHeight = if (skeletonConfig.userHeight > MIN_HEIGHT) {
+		val targetHmdHeight = if (enableConfigHeight && skeletonConfig.userHeight > MIN_HEIGHT) {
 			skeletonConfig.userHeight
 		} else {
 			calcTargetHmdHeight(frames, config)
