@@ -317,6 +317,8 @@ class AutoBoneHandler(private val server: VRServer) {
 				val removeTrackersByPosition = false
 				// Offset HMD timing
 				val offsetHmdTiming = false
+				// Check for equal rotations
+				val checkForEqualRotations = false
 
 				// Generate BVH for AutoBone recording
 				val generateBvh = true
@@ -531,6 +533,22 @@ class AutoBoneHandler(private val server: VRServer) {
 								),
 								value
 							)
+					}
+				}
+
+				// Check for equal rotations
+				if (checkForEqualRotations) {
+					for (frames in value) {
+						val chest = frames.find { frame -> frame?.tryGetTrackerPosition() == TrackerPosition.CHEST } ?: continue
+						val hip = frames.find { frame -> frame?.tryGetTrackerPosition() == TrackerPosition.HIP } ?: continue
+
+						val chestRot = chest.tryGetRotation()
+						val hipRot = hip.tryGetRotation()
+						if (chestRot != null && chestRot == hipRot) {
+							LogManager.info("Chest == hip rotation $chestRot $hipRot")
+						} else {
+							LogManager.info("Chest != hip rotation $chestRot $hipRot")
+						}
 					}
 				}
 				// endregion
