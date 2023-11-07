@@ -6,13 +6,13 @@ import dev.slimevr.autobone.AutoBone.Companion.loadDir
 import dev.slimevr.autobone.errors.AutoBoneException
 import dev.slimevr.poseframeformat.PoseFrames
 import dev.slimevr.poseframeformat.PoseRecorder
-import dev.slimevr.poseframeformat.PoseRecorder.RecordingProgress
 import dev.slimevr.poseframeformat.trackerdata.TrackerFrameData
 import dev.slimevr.tracking.processor.config.SkeletonConfigManager
 import dev.slimevr.tracking.processor.config.SkeletonConfigOffsets
 import io.eiren.util.StringUtils
 import io.eiren.util.logging.LogManager
 import org.apache.commons.lang3.tuple.Pair
+import java.util.*
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.thread
@@ -105,32 +105,6 @@ class AutoBoneHandler(private val server: VRServer) {
 				// Calculate total time in seconds
 				val totalTime: Float = (sampleCount * sampleRate) / 1000f
 
-				val framesFuture = poseRecorder
-					.startFrameRecording(
-						sampleCount,
-						sampleRate
-					) { progress: RecordingProgress ->
-						announceProcessStatus(
-							AutoBoneProcessType.RECORD,
-							current = progress.frame.toLong(),
-							total = progress.totalFrames.toLong(),
-							eta = totalTime - (progress.frame * totalTime / progress.totalFrames)
-						)
-					}
-				val frames = framesFuture.get()
-				LogManager.info("[AutoBone] Done recording!")
-
-				// Save a recurring recording for users to send as debug info
-				announceProcessStatus(AutoBoneProcessType.RECORD, "Saving recording...")
-				autoBone.saveRecording(frames, "LastABRecording.pfr")
-				if (autoBone.globalConfig.saveRecordings) {
-					announceProcessStatus(
-						AutoBoneProcessType.RECORD,
-						"Saving recording (from config option)..."
-					)
-					autoBone.saveRecording(frames)
-				}
-				listeners.forEach { listener: AutoBoneListener -> listener.onAutoBoneRecordingEnd(frames) }
 				announceProcessStatus(
 					AutoBoneProcessType.RECORD,
 					"Done recording!",
@@ -264,6 +238,9 @@ class AutoBoneHandler(private val server: VRServer) {
 			announceProcessStatus(AutoBoneProcessType.PROCESS, "Processing recording(s)...")
 			LogManager.info("[AutoBone] Processing frames...")
 			val errorStats = StatsCalculator()
+			val offsetStats = EnumMap<SkeletonConfigOffsets, StatsCalculator>(
+				SkeletonConfigOffsets::class.java
+			)
 			val skeletonConfigManagerBuffer = SkeletonConfigManager(false)
 			for ((key, value) in frameRecordings) {
 				LogManager
@@ -315,6 +292,15 @@ class AutoBoneHandler(private val server: VRServer) {
 				LogManager.info("[AutoBone] Done processing!")
 
 				// #region Stats/Values
+				// Accumulate length values
+				for (offset in autoBoneResults.configValues) {
+					val statCalc = offsetStats.getOrPut(offset.key) {
+						StatsCalculator()
+					}
+					// Multiply by 100 to get cm
+					statCalc.addValue(offset.value * 100f)
+				}
+
 				skeletonConfigManagerBuffer.setOffsets(autoBoneResults.configValues)
 				val neckLength = skeletonConfigManagerBuffer
 					.getOffset(SkeletonConfigOffsets.NECK)
@@ -361,6 +347,22 @@ class AutoBoneHandler(private val server: VRServer) {
 					)
 				LogManager.info("[AutoBone] Length values: " + autoBone.lengthsString)
 			}
+			// Length value stats
+			val averageLengthVals = StringBuilder()
+			offsetStats.forEach { (key, value) ->
+				if (averageLengthVals.isNotEmpty()) {
+					averageLengthVals.append(", ")
+				}
+				averageLengthVals
+					.append(key.configKey)
+					.append(": ")
+					.append(StringUtils.prettyNumber(value.mean, 2))
+					.append(" (SD ")
+					.append(StringUtils.prettyNumber(value.standardDeviation, 2))
+					.append(")")
+			}
+			LogManager.info("[AutoBone] Average length values: $averageLengthVals")
+
 			LogManager
 				.info(
 					"[AutoBone] Average height error: " +
