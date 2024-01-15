@@ -321,6 +321,8 @@ class UDPPacket22FeatureFlags(
 	}
 }
 
+class UDPPacket23SaveCalibration : UDPPacket(23)
+
 data class UDPPacket200ProtocolChange(
 	var targetProtocol: Int = 0,
 	var targetProtocolVersion: Int = 0,

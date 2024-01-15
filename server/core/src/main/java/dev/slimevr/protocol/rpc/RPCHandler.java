@@ -19,6 +19,7 @@ import dev.slimevr.tracking.processor.config.SkeletonConfigOffsets;
 import dev.slimevr.tracking.trackers.Tracker;
 import dev.slimevr.tracking.trackers.TrackerPosition;
 import dev.slimevr.tracking.trackers.TrackerUtils;
+import dev.slimevr.tracking.trackers.udp.UDPPacket23SaveCalibration;
 import io.eiren.util.logging.LogManager;
 import io.github.axisangles.ktmath.Quaternion;
 import solarxr_protocol.MessageBundle;
@@ -90,6 +91,11 @@ public class RPCHandler extends ProtocolHandler<RpcMessageHeader> {
 		registerPacketListener(RpcMessage.SetPauseTrackingRequest, this::onSetPauseTrackingRequest);
 
 		registerPacketListener(RpcMessage.HeightRequest, this::onHeightRequest);
+
+		registerPacketListener(
+			RpcMessage.SaveImuCalibrationRequest,
+			this::onSaveImuCalibrationRequest
+		);
 	}
 
 	private void onServerInfosRequest(
@@ -396,5 +402,12 @@ public class RPCHandler extends ProtocolHandler<RpcMessageHeader> {
 			);
 		fbb.finish(createRPCMessage(fbb, RpcMessage.HeightResponse, response));
 		conn.send(fbb.dataBuffer());
+	}
+
+	public void onSaveImuCalibrationRequest(
+		GenericConnection conn,
+		RpcMessageHeader messageHeader
+	) {
+		this.api.server.getTrackersServer().sendPacketToAll(new UDPPacket23SaveCalibration());
 	}
 }

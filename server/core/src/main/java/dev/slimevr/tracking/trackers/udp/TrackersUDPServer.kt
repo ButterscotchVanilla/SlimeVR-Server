@@ -440,12 +440,27 @@ class TrackersUDPServer(private val port: Int, name: String, private val tracker
 				connection.firmwareFeatures = packet.firmwareFeatures
 			}
 
+			is UDPPacket23SaveCalibration -> {}
+
 			is UDPPacket200ProtocolChange -> {}
 		}
 	}
 
 	fun getConnections(): List<UDPDevice?> {
 		return connections
+	}
+
+	fun sendPacketToAll(packet: UDPPacket) {
+		val sendBuffer = ByteArray(512)
+		val bb = ByteBuffer.wrap(sendBuffer).order(ByteOrder.BIG_ENDIAN)
+		synchronized(connections) {
+			for (conn in connections) {
+				bb.limit(bb.capacity())
+				bb.rewind()
+				parser.write(bb, conn, packet)
+				socket.send(DatagramPacket(sendBuffer, bb.position(), conn.address))
+			}
+		}
 	}
 
 	companion object {
