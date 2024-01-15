@@ -20,6 +20,7 @@ import { useWebsocketAPI } from '@/hooks/websocket-api';
 import { useAppContext } from '@/hooks/app';
 import { ClearMountingButton } from './ClearMountingButton';
 import { ToggleableSkeletonVisualizerWidget } from './widgets/SkeletonVisualizerWidget';
+import { SaveImuCalibrationButton } from './SaveImuCalibrationButton';
 
 export function WidgetsComponent() {
   const { config } = useConfig();
@@ -55,6 +56,7 @@ export function WidgetsComponent() {
         {driftCompensationEnabled && (
           <ClearDriftCompensationButton></ClearDriftCompensationButton>
         )}
+        <SaveImuCalibrationButton />
       </div>
       <div className="w-full">
         <OverlayWidget></OverlayWidget>

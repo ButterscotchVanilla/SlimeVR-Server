@@ -112,6 +112,9 @@ widget-drift_compensation-clear = Clear drift compensation
 ## Widget: Clear Reset Mounting
 widget-clear_mounting = Clear reset mounting
 
+## Widget: Save IMU Calibration
+widget-save_imu_calibration = Save IMU calibration
+
 ## Widget: Developer settings
 widget-developer_mode = Developer Mode
 widget-developer_mode-high_contrast = High contrast
