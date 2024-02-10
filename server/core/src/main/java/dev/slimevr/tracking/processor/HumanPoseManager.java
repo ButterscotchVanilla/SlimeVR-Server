@@ -1,6 +1,5 @@
 package dev.slimevr.tracking.processor;
 
-import com.jme3.math.FastMath;
 import dev.slimevr.VRServer;
 import dev.slimevr.config.ConfigManager;
 import dev.slimevr.tracking.processor.config.SkeletonConfigManager;
@@ -14,9 +13,11 @@ import dev.slimevr.tracking.trackers.TrackerRole;
 import dev.slimevr.tracking.trackers.TrackerStatus;
 import dev.slimevr.trackingpause.TrackingPauseHandler;
 import dev.slimevr.util.ann.VRServerThread;
+import io.eiren.math.FloatMath;
 import io.eiren.util.ann.ThreadSafe;
 import io.eiren.util.collections.FastList;
 import io.eiren.util.logging.LogManager;
+import io.github.axisangles.ktmath.EulerOrder;
 import io.github.axisangles.ktmath.Quaternion;
 import io.github.axisangles.ktmath.Vector3;
 import org.apache.commons.math3.util.Precision;
@@ -678,7 +679,7 @@ public class HumanPoseManager {
 					&& tracker.getNeedsReset()
 					&& tracker.getResetsHandler().getLastResetQuaternion() != null
 			) {
-				if (trackersDriftText.length() > 0) {
+				if (!trackersDriftText.isEmpty()) {
 					trackersDriftText.append(" | ");
 				}
 
@@ -686,16 +687,14 @@ public class HumanPoseManager {
 				Quaternion difference = tracker
 					.getRotation()
 					.times(tracker.getResetsHandler().getLastResetQuaternion().inv());
+
 				// Get the pure yaw
-				float trackerDriftAngle = Math
-					.abs(
-						FastMath.atan2(difference.getY(), difference.getW())
-							* 2
-							* FastMath.RAD_TO_DEG
-					);
-				// Fix for polarity or something
-				if (trackerDriftAngle > 180)
-					trackerDriftAngle = Math.abs(trackerDriftAngle - 360);
+				float trackerDriftAngle = FloatMath
+					.toDegrees(difference.toEulerAngles(EulerOrder.YZX).getY());
+				/*
+				 * // Fix for polarity or something if (trackerDriftAngle > 180)
+				 * trackerDriftAngle = Math.abs(trackerDriftAngle - 360);
+				 */
 
 				// Calculate drift per minute
 				float driftPerMin = trackerDriftAngle / (timeSinceLastReset / 60f);
@@ -714,7 +713,7 @@ public class HumanPoseManager {
 			}
 		}
 
-		if (trackersDriftText.length() > 0) {
+		if (!trackersDriftText.isEmpty()) {
 			LogManager
 				.info(
 					"[HumanPoseManager] "
