@@ -1,7 +1,11 @@
 package dev.slimevr.tracking.processor.skeleton
 
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
 import com.jme3.math.FastMath
 import dev.slimevr.VRServer
+import dev.slimevr.filtering.CircularArrayList
 import dev.slimevr.tracking.processor.Bone
 import dev.slimevr.tracking.processor.BoneType
 import dev.slimevr.tracking.processor.HumanPoseManager
@@ -26,7 +30,6 @@ import io.github.axisangles.ktmath.Vector3
 import io.github.axisangles.ktmath.Vector3.Companion.NEG_Y
 import io.github.axisangles.ktmath.Vector3.Companion.NULL
 import io.github.axisangles.ktmath.Vector3.Companion.POS_Y
-import java.lang.IllegalArgumentException
 
 class HumanSkeleton(
 	val humanPoseManager: HumanPoseManager,
@@ -141,12 +144,18 @@ class HumanSkeleton(
 	var viveEmulation = ViveEmulation(this)
 	var localizer = Localizer(this)
 
+	val env: OrtEnvironment
+	val session: OrtSession
+	val inferData = CircularArrayList<FloatArray>(31)
+
 	// Constructors
 	init {
 		assembleSkeleton()
 		if (humanPoseManager.computedTrackers != null) {
 			setComputedTrackers(humanPoseManager.computedTrackers)
 		}
+		env = OrtEnvironment.getEnvironment()
+		session = env.createSession("model_8541.onnx", OrtSession.SessionOptions())
 	}
 
 	constructor(
@@ -175,6 +184,36 @@ class HumanSkeleton(
 			trackersList = FastList(0)
 		}
 		setTrackersFromList(trackersList)
+	}
+
+	private fun getInferData(): FloatArray {
+		val head = headBone.getLocalRotation().toEulerAngles(EulerOrder.ZXY)
+		val rHand = (rightHandBone.parent!!.getLocalRotation().inv() * rightHandBone.getLocalRotation()).toEulerAngles(EulerOrder.ZXY)
+		val lHand = (leftHandBone.parent!!.getLocalRotation().inv() * leftHandBone.getLocalRotation()).toEulerAngles(EulerOrder.ZXY)
+
+		return floatArrayOf(head.x, head.y, head.z, rHand.x, rHand.y, rHand.z, lHand.x, lHand.y, lHand.z)
+	}
+
+	private fun formatData(data: List<FloatArray>): Array<FloatArray> {
+		val results = Array(31) { FloatArray(9) }
+
+		for (i in data.indices) {
+			results[i] = data[i]
+		}
+
+		return results
+	}
+
+	/**
+	 * Input dimensions 31 x 9
+	 */
+	private fun infer(input: Array<FloatArray>): FloatArray {
+		OnnxTensor.createTensor(env, input).use { tensor ->
+			session.run(mapOf("onnx::Gemm_0" to tensor)).use { results ->
+				LogManager.info(results.toString())
+				return (results[0].value as Array<*>).last() as FloatArray
+			}
+		}
 	}
 
 	/**
@@ -361,6 +400,22 @@ class HumanSkeleton(
 		tapDetectionManager.update()
 
 		updateTransforms()
+
+		// Infer elbows
+		if (inferData.size >= inferData.capacity()) {
+			inferData.removeLast()
+		}
+		inferData.add(getInferData())
+		val inputData = formatData(inferData)
+		val results = infer(inputData)
+		LogManager.info("Predicted lower arms: [${results.joinToString()}]")
+
+		val rLowerArm = rightUpperArmBone.getLocalRotation() * EulerAngles(EulerOrder.ZXY, results[0], results[1], results[2]).toQuaternion()
+		val lLowerArm = leftUpperArmBone.getLocalRotation() * EulerAngles(EulerOrder.ZXY, results[3], results[4], results[5]).toQuaternion()
+
+		rightLowerArmBone.setRotation(rLowerArm)
+		leftLowerArmBone.setRotation(lLowerArm)
+
 		updateBones()
 		updateComputedTrackers()
 
