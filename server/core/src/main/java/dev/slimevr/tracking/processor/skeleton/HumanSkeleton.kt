@@ -210,7 +210,6 @@ class HumanSkeleton(
 	private fun infer(input: Array<FloatArray>): FloatArray {
 		OnnxTensor.createTensor(env, input).use { tensor ->
 			session.run(mapOf("onnx::Gemm_0" to tensor)).use { results ->
-				LogManager.info(results.toString())
 				return (results[0].value as Array<*>).last() as FloatArray
 			}
 		}
@@ -408,7 +407,6 @@ class HumanSkeleton(
 		inferData.add(getInferData())
 		val inputData = formatData(inferData)
 		val results = infer(inputData)
-		LogManager.info("Predicted lower arms: [${results.joinToString()}]")
 
 		val rLowerArm = rightUpperArmBone.getLocalRotation() * EulerAngles(EulerOrder.ZXY, results[0], results[1], results[2]).toQuaternion()
 		val lLowerArm = leftUpperArmBone.getLocalRotation() * EulerAngles(EulerOrder.ZXY, results[3], results[4], results[5]).toQuaternion()
