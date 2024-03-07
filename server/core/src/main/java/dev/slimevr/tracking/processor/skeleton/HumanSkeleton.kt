@@ -204,16 +204,30 @@ class HumanSkeleton(
 		setTrackersFromList(trackersList)
 	}
 
+	/**
+	 * Output dimensions 31 x 21
+	 */
 	private fun getInferData(): FloatArray {
-		val head = headBone.getLocalRotation().toEulerAngles(EulerOrder.ZXY)
-		val rHand = (rightHandBone.parent!!.getLocalRotation().inv() * rightHandBone.getLocalRotation()).toEulerAngles(EulerOrder.ZXY)
-		val lHand = (leftHandBone.parent!!.getLocalRotation().inv() * leftHandBone.getLocalRotation()).toEulerAngles(EulerOrder.ZXY)
+		val headPos = headBone.getPosition()
+		val lHandPos = leftHandBone.getPosition()
+		val rHandPos = rightHandBone.getPosition()
 
-		return floatArrayOf(head.x, head.y, head.z, rHand.x, rHand.y, rHand.z, lHand.x, lHand.y, lHand.z)
+		val headRot = headBone.getLocalRotation()
+		val lHandRot = leftHandBone.getLocalRotation()
+		val rHandRot = rightHandBone.getLocalRotation()
+
+		return floatArrayOf(
+			headPos.x, headPos.y, headPos.z,
+			lHandPos.x, lHandPos.y, lHandPos.z,
+			rHandPos.x, rHandPos.y, rHandPos.z,
+			headRot.x, headRot.y, headRot.z, headRot.w,
+			lHandRot.x, lHandRot.y, lHandRot.z, lHandRot.w,
+			rHandRot.x, rHandRot.y, rHandRot.z, rHandRot.w
+		)
 	}
 
 	private fun formatData(data: List<FloatArray>): Array<FloatArray> {
-		val results = Array(31) { FloatArray(9) }
+		val results = Array(31) { FloatArray(21) }
 
 		for (i in data.indices) {
 			results[i] = data[i]
@@ -223,7 +237,9 @@ class HumanSkeleton(
 	}
 
 	/**
-	 * Input dimensions 31 x 9
+	 * Input dimensions 31 x 21
+	 *
+	 * Output dimensions 31 x 8
 	 */
 	private fun infer(input: Array<FloatArray>): FloatArray {
 		OnnxTensor.createTensor(env, input).use { tensor ->
@@ -434,8 +450,8 @@ class HumanSkeleton(
 			val inputData = formatData(inferData)
 			val results = infer(inputData)
 
-			val rLowerArm = rightUpperArmBone.getLocalRotation() * EulerAngles(EulerOrder.ZXY, results[0], results[1], results[2]).toQuaternion()
-			val lLowerArm = leftUpperArmBone.getLocalRotation() * EulerAngles(EulerOrder.ZXY, results[3], results[4], results[5]).toQuaternion()
+			val rLowerArm = Quaternion(results[3], results[0], results[1], results[2])
+			val lLowerArm = Quaternion(results[7], results[4], results[5], results[6])
 
 			rightLowerArmBone.setRotation(rLowerArm)
 			leftLowerArmBone.setRotation(lLowerArm)
