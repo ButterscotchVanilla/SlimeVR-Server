@@ -250,7 +250,7 @@ class HumanSkeleton(
 	 */
 	private fun infer(input: Array<FloatArray>): FloatArray {
 		OnnxTensor.createTensor(env, input).use { tensor ->
-			session.run(mapOf("onnx::Gemm_0" to tensor)).use { results ->
+			session.run(mapOf("input" to tensor)).use { results ->
 				return (results[0].value as Array<*>).last() as FloatArray
 			}
 		}
