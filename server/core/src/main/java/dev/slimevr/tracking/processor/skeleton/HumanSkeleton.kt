@@ -30,6 +30,11 @@ import io.github.axisangles.ktmath.Vector3
 import io.github.axisangles.ktmath.Vector3.Companion.NEG_Y
 import io.github.axisangles.ktmath.Vector3.Companion.NULL
 import io.github.axisangles.ktmath.Vector3.Companion.POS_Y
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.extension
+import kotlin.io.path.pathString
+import kotlin.jvm.optionals.getOrNull
 
 class HumanSkeleton(
 	val humanPoseManager: HumanPoseManager,
@@ -154,8 +159,18 @@ class HumanSkeleton(
 		if (humanPoseManager.computedTrackers != null) {
 			setComputedTrackers(humanPoseManager.computedTrackers)
 		}
+
+		// ONNX model
 		env = OrtEnvironment.getEnvironment()
-		session = env.createSession("model_8541.onnx", OrtSession.SessionOptions())
+
+		val firstModel = Files.walk(Path.of("."), 1).use { walk ->
+			walk.filter {
+				!Files.isDirectory(it) && it.extension.equals("onnx", true)
+			}.findFirst().getOrNull()
+		} ?: throw IllegalStateException("Could not find any ONNX models.")
+
+		session = env.createSession(firstModel.pathString, OrtSession.SessionOptions())
+		LogManager.info("Loaded ONNX model \"${firstModel.pathString}\" for FBE")
 	}
 
 	constructor(
