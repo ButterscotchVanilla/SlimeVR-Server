@@ -152,6 +152,7 @@ class HumanSkeleton(
 	// ONNX FBE
 	val env: OrtEnvironment
 	val session: OrtSession
+	val inputName: String
 	val inferData = CircularArrayList<FloatArray>(31)
 
 	val inferDelay = 1000L / 100L // 100 Hz
@@ -177,6 +178,7 @@ class HumanSkeleton(
 		} ?: throw IllegalStateException("Could not find any ONNX models.")
 
 		session = env.createSession(firstModel.pathString, OrtSession.SessionOptions())
+		inputName = session.inputNames.first()
 		LogManager.info("Loaded ONNX model \"${firstModel.pathString}\" for FBE")
 	}
 
@@ -250,7 +252,7 @@ class HumanSkeleton(
 	 */
 	private fun infer(input: Array<FloatArray>): FloatArray {
 		OnnxTensor.createTensor(env, input).use { tensor ->
-			session.run(mapOf("input" to tensor)).use { results ->
+			session.run(mapOf(inputName to tensor)).use { results ->
 				return (results[0].value as Array<*>).last() as FloatArray
 			}
 		}
