@@ -149,9 +149,12 @@ class HumanSkeleton(
 	var viveEmulation = ViveEmulation(this)
 	var localizer = Localizer(this)
 
+	// ONNX FBE
 	val env: OrtEnvironment
 	val session: OrtSession
 	val inferData = CircularArrayList<FloatArray>(31)
+	val inferDelay = 1000L / 100L // 100 Hz
+	var nextInfer = 0L
 
 	// Constructors
 	init {
@@ -415,19 +418,28 @@ class HumanSkeleton(
 
 		updateTransforms()
 
-		// Infer elbows
-		if (inferData.size >= inferData.capacity()) {
-			inferData.removeLast()
+		val curTime = System.currentTimeMillis()
+		if (curTime >= nextInfer) {
+			// Next frame time, preventing duplicate frames
+			nextInfer += inferDelay
+			if (curTime >= nextInfer) {
+				nextInfer = curTime + inferDelay
+			}
+
+			// Infer elbows
+			if (inferData.size >= inferData.capacity()) {
+				inferData.removeLast()
+			}
+			inferData.add(getInferData())
+			val inputData = formatData(inferData)
+			val results = infer(inputData)
+
+			val rLowerArm = rightUpperArmBone.getLocalRotation() * EulerAngles(EulerOrder.ZXY, results[0], results[1], results[2]).toQuaternion()
+			val lLowerArm = leftUpperArmBone.getLocalRotation() * EulerAngles(EulerOrder.ZXY, results[3], results[4], results[5]).toQuaternion()
+
+			rightLowerArmBone.setRotation(rLowerArm)
+			leftLowerArmBone.setRotation(lLowerArm)
 		}
-		inferData.add(getInferData())
-		val inputData = formatData(inferData)
-		val results = infer(inputData)
-
-		val rLowerArm = rightUpperArmBone.getLocalRotation() * EulerAngles(EulerOrder.ZXY, results[0], results[1], results[2]).toQuaternion()
-		val lLowerArm = leftUpperArmBone.getLocalRotation() * EulerAngles(EulerOrder.ZXY, results[3], results[4], results[5]).toQuaternion()
-
-		rightLowerArmBone.setRotation(rLowerArm)
-		leftLowerArmBone.setRotation(lLowerArm)
 
 		updateBones()
 		updateComputedTrackers()
