@@ -227,7 +227,7 @@ class HumanSkeleton(
 	}
 
 	private fun formatData(data: List<FloatArray>): Array<FloatArray> {
-		val results = Array(31) { FloatArray(21) }
+		val results = Array(inferData.capacity()) { FloatArray(21) }
 
 		for (i in data.indices) {
 			results[i] = data[i]
