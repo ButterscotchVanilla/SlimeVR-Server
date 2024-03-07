@@ -218,15 +218,15 @@ class HumanSkeleton(
 		val rHand = rightHandTracker!!
 
 		val headPos = headBone.getPosition()
-		val lHandPos = lHand.position
-		val rHandPos = rHand.position
+		val lHandPos = lHand.position - headPos
+		val rHandPos = rHand.position - headPos
 
 		val headRot = headBone.getLocalRotation()
 		val lHandRot = lHand.getRotation()
 		val rHandRot = rHand.getRotation()
 
 		return floatArrayOf(
-			headPos.x, headPos.y, headPos.z,
+			0f, 0f, 0f,
 			lHandPos.x, lHandPos.y, lHandPos.z,
 			rHandPos.x, rHandPos.y, rHandPos.z,
 			headRot.x, headRot.y, headRot.z, headRot.w,
@@ -253,7 +253,7 @@ class HumanSkeleton(
 	private fun infer(input: Array<FloatArray>): FloatArray {
 		OnnxTensor.createTensor(env, input).use { tensor ->
 			session.run(mapOf(inputName to tensor)).use { results ->
-				return (results[0].value as Array<*>).last() as FloatArray
+				return (results[0].value as Array<*>).first() as FloatArray
 			}
 		}
 	}
