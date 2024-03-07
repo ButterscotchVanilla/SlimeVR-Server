@@ -153,8 +153,12 @@ class HumanSkeleton(
 	val env: OrtEnvironment
 	val session: OrtSession
 	val inferData = CircularArrayList<FloatArray>(31)
+
 	val inferDelay = 1000L / 100L // 100 Hz
 	var nextInfer = 0L
+
+	var lastRightInfer = Quaternion.IDENTITY
+	var lastLeftInfer = Quaternion.IDENTITY
 
 	// Constructors
 	init {
@@ -208,13 +212,16 @@ class HumanSkeleton(
 	 * Output dimensions 31 x 21
 	 */
 	private fun getInferData(): FloatArray {
+		val lHand = leftHandTracker!!
+		val rHand = rightHandTracker!!
+
 		val headPos = headBone.getPosition()
-		val lHandPos = leftHandBone.getPosition()
-		val rHandPos = rightHandBone.getPosition()
+		val lHandPos = lHand.position
+		val rHandPos = rHand.position
 
 		val headRot = headBone.getLocalRotation()
-		val lHandRot = leftHandBone.getLocalRotation()
-		val rHandRot = rightHandBone.getLocalRotation()
+		val lHandRot = lHand.getRotation()
+		val rHandRot = rHand.getRotation()
 
 		return floatArrayOf(
 			headPos.x, headPos.y, headPos.z,
@@ -435,7 +442,11 @@ class HumanSkeleton(
 		updateTransforms()
 
 		val curTime = System.currentTimeMillis()
-		if (curTime >= nextInfer) {
+		if (
+			leftHandTracker?.hasPosition == true &&
+			rightHandTracker?.hasPosition == true &&
+			curTime >= nextInfer
+		) {
 			// Next frame time, preventing duplicate frames
 			nextInfer += inferDelay
 			if (curTime >= nextInfer) {
@@ -450,12 +461,12 @@ class HumanSkeleton(
 			val inputData = formatData(inferData)
 			val results = infer(inputData)
 
-			val rLowerArm = Quaternion(results[3], results[0], results[1], results[2])
-			val lLowerArm = Quaternion(results[7], results[4], results[5], results[6])
-
-			rightLowerArmBone.setRotation(rLowerArm)
-			leftLowerArmBone.setRotation(lLowerArm)
+			lastRightInfer = Quaternion(results[3], results[0], results[1], results[2])
+			lastLeftInfer = Quaternion(results[7], results[4], results[5], results[6])
 		}
+
+		rightLowerArmBone.setRotation(lastRightInfer)
+		leftLowerArmBone.setRotation(lastLeftInfer)
 
 		updateBones()
 		updateComputedTrackers()
