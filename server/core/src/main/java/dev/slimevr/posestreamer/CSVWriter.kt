@@ -4,6 +4,8 @@ import dev.slimevr.tracking.processor.Bone
 import dev.slimevr.tracking.processor.skeleton.HumanSkeleton
 import dev.slimevr.tracking.trackers.Tracker
 import io.eiren.util.collections.FastList
+import io.github.axisangles.ktmath.Quaternion
+import io.github.axisangles.ktmath.Vector3
 import java.io.BufferedWriter
 import java.io.File
 import java.io.OutputStream
@@ -50,7 +52,9 @@ class CSVWriter : PoseDataStream {
 	}
 
 	override fun writeFrame(skeleton: HumanSkeleton) {
-		writer.write("${columns.joinToString(",") { it.dataToColumns() }}\n")
+		val rotOffset = skeleton.headTracker!!.getRotation().inv().unit()
+		val posOffset = -skeleton.headTracker!!.position
+		writer.write("${columns.joinToString(",") { it.dataToColumns(rotOffset, posOffset) }}\n")
 	}
 
 	override fun close() {
@@ -60,40 +64,19 @@ class CSVWriter : PoseDataStream {
 
 	interface CSVColumn {
 		fun toColumnLabels(): String
-		fun dataToColumns(): String
+		fun dataToColumns(rotOffset: Quaternion, posOffset: Vector3): String
 	}
 
 	data class TrackerColumn(val tracker: Tracker) : CSVColumn {
 		override fun toColumnLabels(): String {
 			val name = "tracker ${tracker.trackerPosition?.name ?: "unknown"}"
-
-			val sb = StringBuilder()
-
-			if (tracker.hasRotation) {
-				sb.append("$name quat w,$name quat x,$name quat y,$name quat z")
-			}
-
-			if (tracker.hasPosition) {
-				sb.append("$name pos x,$name pos y,$name pos z")
-			}
-
-			return sb.toString()
+			return "$name quat w,$name quat x,$name quat y,$name quat z,$name pos x,$name pos y,$name pos z"
 		}
 
-		override fun dataToColumns(): String {
-			val sb = StringBuilder()
-
-			if (tracker.hasRotation) {
-				val rot = tracker.getRotation()
-				sb.append("${rot.w},${rot.x},${rot.y},${rot.z}")
-			}
-
-			if (tracker.hasPosition) {
-				val pos = tracker.position
-				sb.append("${pos.x},${pos.y},${pos.z}")
-			}
-
-			return sb.toString()
+		override fun dataToColumns(rotOffset: Quaternion, posOffset: Vector3): String {
+			val rot = (rotOffset * tracker.getRotation()).unit()
+			val pos = posOffset + tracker.position
+			return "${rot.w},${rot.x},${rot.y},${rot.z},${pos.x},${pos.y},${pos.z}"
 		}
 	}
 
@@ -103,8 +86,8 @@ class CSVWriter : PoseDataStream {
 			return "$name quat w,$name quat x,$name quat y,$name quat z"
 		}
 
-		override fun dataToColumns(): String {
-			val rot = bone.getGlobalRotation()
+		override fun dataToColumns(rotOffset: Quaternion, posOffset: Vector3): String {
+			val rot = (rotOffset * bone.getGlobalRotation()).unit()
 			return "${rot.w},${rot.x},${rot.y},${rot.z}"
 		}
 	}

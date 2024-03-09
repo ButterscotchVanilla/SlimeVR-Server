@@ -20,6 +20,7 @@ import dev.slimevr.serial.SerialHandlerStub
 import dev.slimevr.setup.TapSetupHandler
 import dev.slimevr.status.StatusSystem
 import dev.slimevr.tracking.processor.HumanPoseManager
+import dev.slimevr.tracking.processor.config.SkeletonConfigToggles
 import dev.slimevr.tracking.processor.skeleton.HumanSkeleton
 import dev.slimevr.tracking.trackers.DeviceManager
 import dev.slimevr.tracking.trackers.Tracker
@@ -167,8 +168,13 @@ class VRServer @JvmOverloads constructor(
 
 		// Convert PFR to CSV
 		val streamer = PoseFrameStreamer("input.pfr")
-		streamer.frameInterval = 10
+		// 100 Hz
+		streamer.frameInterval = 10L
 		streamer.humanPoseManager.loadFromConfig(configManager)
+		// Force full skeleton connection
+		streamer.humanPoseManager.setToggle(SkeletonConfigToggles.FORCE_ARMS_FROM_HMD, true)
+		// Normalize scale for output
+		streamer.trackerFramesPlayer.setScales(streamer.humanPoseManager.userHeightFromConfig)
 		val csvWriter = CSVWriter("output.csv")
 		streamer.setOutput(csvWriter)
 		streamer.streamAllFrames()
