@@ -37,9 +37,9 @@ class CSVWriter : PoseDataStream {
 
 	override fun writeHeader(skeleton: HumanSkeleton, streamer: PoseStreamer) {
 		// Tracker columns
-		addTracker(skeleton.headTracker!!)
-		addTracker(skeleton.leftHandTracker!!)
-		addTracker(skeleton.rightHandTracker!!)
+		addTracker(skeleton.headTracker ?: throw IllegalStateException("Head tracker is needed."))
+		addTracker(skeleton.leftHandTracker ?: throw IllegalStateException("Left hand tracker is needed."))
+		addTracker(skeleton.rightHandTracker ?: throw IllegalStateException("Right hand tracker is needed."))
 
 		// Bone columns
 		if (skeleton.isTrackingLeftArmFromController || skeleton.isTrackingRightArmFromController) {
