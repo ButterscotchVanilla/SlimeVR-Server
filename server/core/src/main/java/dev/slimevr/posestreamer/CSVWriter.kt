@@ -75,7 +75,7 @@ class CSVWriter : PoseDataStream {
 
 		override fun dataToColumns(rotOffset: Quaternion, posOffset: Vector3): String {
 			val rot = (rotOffset * tracker.getRotation()).unit()
-			val pos = posOffset + tracker.position
+			val pos = rotOffset.sandwich(tracker.position + posOffset)
 			return "${rot.w},${rot.x},${rot.y},${rot.z},${pos.x},${pos.y},${pos.z}"
 		}
 	}
