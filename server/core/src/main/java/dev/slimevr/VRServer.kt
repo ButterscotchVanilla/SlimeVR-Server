@@ -34,11 +34,16 @@ import io.eiren.util.ann.ThreadSecure
 import io.eiren.util.collections.FastList
 import io.eiren.util.logging.LogManager
 import solarxr_protocol.datatypes.TrackerIdT
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.*
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Consumer
 import kotlin.concurrent.schedule
+import kotlin.io.path.createDirectories
+import kotlin.io.path.extension
+import kotlin.io.path.pathString
 
 typealias SteamBridgeProvider = (
 	server: VRServer,
@@ -167,18 +172,38 @@ class VRServer @JvmOverloads constructor(
 		instance = this
 
 		// Convert PFR to CSV
-		val streamer = PoseFrameStreamer("input.pfr")
-		// 100 Hz
-		streamer.frameInterval = 10L
-		streamer.humanPoseManager.loadFromConfig(configManager)
-		// Force full skeleton connection
-		streamer.humanPoseManager.setToggle(SkeletonConfigToggles.FORCE_ARMS_FROM_HMD, true)
-		// Normalize scale for output
-		streamer.trackerFramesPlayer.setScales(streamer.humanPoseManager.userHeightFromConfig)
-		val csvWriter = CSVWriter("output.csv")
-		streamer.setOutput(csvWriter)
-		streamer.streamAllFrames()
-		streamer.closeOutput()
+		val input = Path.of("./Inputs")
+		val output = Path.of("./Outputs")
+		input.createDirectories()
+		output.createDirectories()
+
+		Files.walk(input, 1).use { walk ->
+			walk.filter {
+				!Files.isDirectory(it) && it.extension.equals("pfr", true)
+			}.forEach { pfr ->
+				try {
+					val streamer = PoseFrameStreamer(pfr.pathString)
+					// 100 Hz
+					streamer.frameInterval = 10L
+					streamer.humanPoseManager.loadFromConfig(configManager)
+					// Force full skeleton connection
+					streamer.humanPoseManager.setToggle(SkeletonConfigToggles.FORCE_ARMS_FROM_HMD, true)
+					// Normalize scale for output
+					streamer.trackerFramesPlayer.setScales(streamer.humanPoseManager.userHeightFromConfig)
+
+					val csv = output.resolve("${pfr.fileName}_output.csv")
+					CSVWriter(csv.pathString).use { csvWriter ->
+						streamer.setOutput(csvWriter)
+						streamer.streamAllFrames()
+						streamer.closeOutput()
+					}
+
+					LogManager.info("Converted recording \"$pfr\" to \"$csv\"")
+				} catch (e: Exception) {
+					LogManager.severe("Failed to process recording \"$pfr\":\n$e", e)
+				}
+			}
+		}
 	}
 
 	fun hasBridge(bridgeClass: Class<out Bridge?>): Boolean {
