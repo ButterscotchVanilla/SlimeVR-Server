@@ -18,25 +18,32 @@ class CSVWriter : PoseDataStream {
 	constructor(file: File) : super(file)
 	constructor(file: String) : super(file)
 
+	private fun addTracker(tracker: Tracker) {
+		if (!tracker.hasRotation || !tracker.hasPosition) {
+			throw IllegalStateException("Tracker ${tracker.trackerPosition} must have rotation and position data.")
+		}
+		columns.add(TrackerColumn(tracker))
+	}
+
+	private fun addBoneHierarchy(bone: Bone) {
+		columns.add(BoneColumn(bone))
+
+		for (child in bone.children) {
+			addBoneHierarchy(child)
+		}
+	}
+
 	override fun writeHeader(skeleton: HumanSkeleton, streamer: PoseStreamer) {
 		// Tracker columns
-		columns.add(TrackerColumn(skeleton.headTracker!!))
-		columns.add(TrackerColumn(skeleton.leftHandTracker!!))
-		columns.add(TrackerColumn(skeleton.rightHandTracker!!))
+		addTracker(skeleton.headTracker!!)
+		addTracker(skeleton.leftHandTracker!!)
+		addTracker(skeleton.rightHandTracker!!)
 
 		// Bone columns
-		columns.add(BoneColumn(skeleton.headBone))
-		columns.add(BoneColumn(skeleton.neckBone))
-
-		columns.add(BoneColumn(skeleton.leftShoulderBone))
-		columns.add(BoneColumn(skeleton.leftUpperArmBone))
-		columns.add(BoneColumn(skeleton.leftLowerArmBone))
-		columns.add(BoneColumn(skeleton.leftHandBone))
-
-		columns.add(BoneColumn(skeleton.rightShoulderBone))
-		columns.add(BoneColumn(skeleton.rightUpperArmBone))
-		columns.add(BoneColumn(skeleton.rightLowerArmBone))
-		columns.add(BoneColumn(skeleton.rightHandBone))
+		if (skeleton.isTrackingLeftArmFromController || skeleton.isTrackingRightArmFromController) {
+			throw IllegalStateException("Arms cannot be tracked from controllers.")
+		}
+		addBoneHierarchy(skeleton.headBone)
 
 		// Write CSV header
 		writer.write("${columns.joinToString(",") { it.toColumnLabels() }}\n")
