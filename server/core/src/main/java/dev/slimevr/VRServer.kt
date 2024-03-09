@@ -10,6 +10,8 @@ import dev.slimevr.osc.OSCRouter
 import dev.slimevr.osc.VMCHandler
 import dev.slimevr.osc.VRCOSCHandler
 import dev.slimevr.posestreamer.BVHRecorder
+import dev.slimevr.posestreamer.CSVWriter
+import dev.slimevr.posestreamer.PoseFrameStreamer
 import dev.slimevr.protocol.ProtocolAPI
 import dev.slimevr.reset.ResetHandler
 import dev.slimevr.serial.ProvisioningHandler
@@ -162,6 +164,15 @@ class VRServer @JvmOverloads constructor(
 			registerTracker(tracker)
 		}
 		instance = this
+
+		// Convert PFR to CSV
+		val streamer = PoseFrameStreamer("input.pfr")
+		streamer.frameInterval = 10
+		streamer.humanPoseManager.loadFromConfig(configManager)
+		val csvWriter = CSVWriter("output.csv")
+		streamer.setOutput(csvWriter)
+		streamer.streamAllFrames()
+		streamer.closeOutput()
 	}
 
 	fun hasBridge(bridgeClass: Class<out Bridge?>): Boolean {
