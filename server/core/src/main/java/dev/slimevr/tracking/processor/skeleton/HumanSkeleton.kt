@@ -217,21 +217,21 @@ class HumanSkeleton(
 		val lHand = leftHandTracker!!
 		val rHand = rightHandTracker!!
 
-		val headPos = headBone.getPosition()
-		val lHandPos = lHand.position - headPos
-		val rHandPos = rHand.position - headPos
+		val headRot = headBone.getGlobalRotation().inv()
+		val lHandRot = headRot * lHand.getRotation()
+		val rHandRot = headRot * rHand.getRotation()
 
-		val headRot = headBone.getLocalRotation()
-		val lHandRot = lHand.getRotation()
-		val rHandRot = rHand.getRotation()
+		val headPos = headBone.getPosition()
+		val lHandPos = headRot.sandwich(lHand.position - headPos)
+		val rHandPos = headRot.sandwich(rHand.position - headPos)
 
 		return floatArrayOf(
+			1f, 0f, 0f, 0f,
 			0f, 0f, 0f,
+			lHandRot.w, lHandRot.x, lHandRot.y, lHandRot.z,
 			lHandPos.x, lHandPos.y, lHandPos.z,
-			rHandPos.x, rHandPos.y, rHandPos.z,
-			headRot.x, headRot.y, headRot.z, headRot.w,
-			lHandRot.x, lHandRot.y, lHandRot.z, lHandRot.w,
-			rHandRot.x, rHandRot.y, rHandRot.z, rHandRot.w
+			rHandRot.w, rHandRot.x, rHandRot.y, rHandRot.z,
+			rHandPos.x, rHandPos.y, rHandPos.z
 		)
 	}
 
