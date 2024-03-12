@@ -463,12 +463,14 @@ class HumanSkeleton(
 			val inputData = formatData(inferData)
 			val results = infer(inputData)
 
-			lastRightInfer = Quaternion(results[3], results[0], results[1], results[2])
-			lastLeftInfer = Quaternion(results[7], results[4], results[5], results[6])
+			// Get results and de-normalize the values
+			val headRot = headBone.getGlobalRotation()
+			lastLeftInfer = headRot * Quaternion(results[0], results[1], results[2], results[3])
+			lastRightInfer = headRot * Quaternion(results[4], results[5], results[6], results[7])
 		}
 
-		rightLowerArmBone.setRotation(lastRightInfer)
 		leftLowerArmBone.setRotation(lastLeftInfer)
+		rightLowerArmBone.setRotation(lastRightInfer)
 
 		updateBones()
 		updateComputedTrackers()
