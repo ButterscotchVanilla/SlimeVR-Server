@@ -6,6 +6,7 @@ import { useOnboarding } from './onboarding';
 export interface WifiFormData {
   ssid: string;
   password?: string;
+  port?: string;
 }
 
 export function useWifiForm() {
@@ -24,10 +25,13 @@ export function useWifiForm() {
         password: state.wifi.password,
       });
     }
+    reset({
+      port: state.port ?? 'Auto',
+    });
   }, []);
 
   const submitWifiCreds = (value: WifiFormData) => {
-    setWifiCredentials(value.ssid, value.password ?? '');
+    setWifiCredentials(value.ssid, value.password ?? '', value.port);
     navigate('/onboarding/connect-trackers', {
       state: { alonePage: state.alonePage },
     });

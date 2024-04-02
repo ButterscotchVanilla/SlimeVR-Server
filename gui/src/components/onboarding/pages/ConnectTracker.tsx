@@ -80,6 +80,7 @@ export function ConnectTrackersPage() {
     const req = new StartWifiProvisioningRequestT();
     req.ssid = state.wifi?.ssid as string;
     req.password = state.wifi?.password as string;
+    req.port = state.port === 'Auto' ? null : state.port ?? null;
 
     sendRPCPacket(RpcMessage.StartWifiProvisioningRequest, req);
     return () => {

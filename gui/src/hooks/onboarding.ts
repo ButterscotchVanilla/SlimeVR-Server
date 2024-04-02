@@ -5,18 +5,19 @@ import { useConfig } from './config';
 type OnboardingAction =
   | { type: 'progress'; value: number }
   | { type: 'alone-page'; value: boolean }
-  | { type: 'wifi-creds'; ssid: string; password: string };
+  | { type: 'wifi-creds'; ssid: string; password: string; port?: string };
 
 interface OnboardingState {
   progress: number;
   wifi?: { ssid: string; password: string };
+  port?: string;
   alonePage: boolean;
 }
 
 export interface OnboardingContext {
   state: OnboardingState;
   applyProgress: (value: number) => void;
-  setWifiCredentials: (ssid: string, password: string) => void;
+  setWifiCredentials: (ssid: string, password: string, port?: string) => void;
   skipSetup: () => void;
 }
 
@@ -26,6 +27,7 @@ export function reducer(state: OnboardingState, action: OnboardingAction) {
       return {
         ...state,
         wifi: { ssid: action.ssid, password: action.password },
+        port: action.port,
       };
     case 'progress':
       return {
@@ -68,8 +70,8 @@ export function useProvideOnboarding(): OnboardingContext {
         dispatch({ type: 'progress', value });
       }, []);
     },
-    setWifiCredentials: (ssid: string, password: string) => {
-      dispatch({ type: 'wifi-creds', ssid, password });
+    setWifiCredentials: (ssid: string, password: string, port?: string) => {
+      dispatch({ type: 'wifi-creds', ssid, password, port });
     },
     skipSetup: () => {
       setConfig({ doneOnboarding: true });

@@ -7,17 +7,48 @@ import { Typography } from '@/components/commons/Typography';
 import classNames from 'classnames';
 import { useTrackers } from '@/hooks/tracker';
 import { useIsRestCalibrationTrackers } from '@/hooks/imu-logic';
+import {
+  RpcMessage,
+  SerialDeviceT,
+  SerialDevicesRequestT,
+  SerialDevicesResponseT,
+} from 'solarxr-protocol';
+import { useEffect, useState } from 'react';
+import { useWebsocketAPI } from '@/hooks/websocket-api';
+import { Dropdown } from '@/components/commons/Dropdown';
 
 export function WifiCredsPage() {
   const { l10n } = useLocalization();
   const { applyProgress, state } = useOnboarding();
   const { control, handleSubmit, submitWifiCreds, formState } = useWifiForm();
+  const { useRPCPacket, sendRPCPacket } = useWebsocketAPI();
   const { useConnectedIMUTrackers } = useTrackers();
   const connectedIMUTrackers = useConnectedIMUTrackers();
 
   applyProgress(0.2);
 
   const isRestCalibration = useIsRestCalibrationTrackers(connectedIMUTrackers);
+
+  const [serialDevices, setSerialDevices] = useState<
+    Omit<SerialDeviceT, 'pack'>[]
+  >([]);
+
+  useEffect(() => {
+    sendRPCPacket(RpcMessage.SerialDevicesRequest, new SerialDevicesRequestT());
+  }, []);
+
+  useRPCPacket(
+    RpcMessage.SerialDevicesResponse,
+    (res: SerialDevicesResponseT) => {
+      setSerialDevices([
+        {
+          name: l10n.getString('settings-serial-auto_dropdown_item'),
+          port: 'Auto',
+        },
+        ...(res.devices || []),
+      ]);
+    }
+  );
 
   return (
     <form
@@ -92,6 +123,16 @@ export function WifiCredsPage() {
                 variant="secondary"
               />
             </Localized>
+            <Dropdown
+              control={control}
+              name="port"
+              display="fit"
+              placeholder={l10n.getString('settings-serial-serial_select')}
+              items={serialDevices.map((device) => ({
+                label: device.name?.toString() || 'error',
+                value: device.port?.toString() || 'error',
+              }))}
+            ></Dropdown>
             <div className="flex flex-row gap-3">
               <Button
                 variant="secondary"
