@@ -44,7 +44,11 @@ export function VersionTag() {
         open(url).catch(() => window.open(url, '_blank'));
       }}
     >
-      {(__VERSION_TAG__ || __COMMIT_HASH__) + (__GIT_CLEAN__ ? '' : '-dirty')}
+      {(__VERSION_TAG__ ||
+        __LAST_VERSION_TAG__ +
+          (__LAST_VERSION_TAG__ && __COMMIT_HASH__ ? '/' : '') +
+          __COMMIT_HASH__) + (__GIT_CLEAN__ ? '' : '-dirty')}
+      /web-gui
     </div>
   );
 }
