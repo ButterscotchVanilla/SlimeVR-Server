@@ -5,6 +5,7 @@ package dev.slimevr.desktop
 import dev.slimevr.Keybinding
 import dev.slimevr.SLIMEVR_IDENTIFIER
 import dev.slimevr.VRServer
+import dev.slimevr.autobone.LBFGS
 import dev.slimevr.bridge.ISteamVRBridge
 import dev.slimevr.desktop.platform.SteamVRBridge
 import dev.slimevr.desktop.platform.linux.UnixSocketBridge
@@ -114,6 +115,11 @@ fun main(args: Array<String>) {
 		LogManager.closeLogger()
 		return
 	}
+
+	val test = LBFGS()
+	test.main()
+	return
+
 	try {
 		val configDir = resolveConfig()
 		LogManager.info("Using config dir: $configDir")
