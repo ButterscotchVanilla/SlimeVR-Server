@@ -43,11 +43,6 @@ export function AutomaticProportionsPage() {
               <StepperSlider
                 variant={state.alonePage ? 'alone' : 'onboarding'}
                 steps={[
-                  { type: 'numbered', component: PutTrackersOnStep },
-                  { type: 'numbered', component: RequirementsStep },
-                  { type: 'numbered', component: CheckHeightStep },
-                  { type: 'numbered', component: CheckFloorHeightStep },
-                  { type: 'numbered', component: PreparationStep },
                   { type: 'numbered', component: StartRecording },
                   { type: 'fullsize', component: Recording },
                   { type: 'numbered', component: VerifyResultsStep },
