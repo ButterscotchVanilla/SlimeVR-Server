@@ -156,6 +156,17 @@ const colors = {
     300: '#FFFFFF',
     400: '#800080',
   },
+  'toy': {
+    100: '#E64B46',
+    200: '#FFAA00',
+    300: '#5A9632',
+  },
+  'windows-xp': {
+    100: '#235CDB',
+    200: '#DE482B',
+    300: '#1C931C',
+    400: '#FCCF03',
+  },
 };
 
 const config = {
@@ -236,6 +247,8 @@ const config = {
         light: `linear-gradient(135deg, ${colors['light-accent'][100]} 50%, ${colors['light-background'][700]} 50% 100%)`,
         'trans-flag': `linear-gradient(135deg, ${colors['trans-blue'][800]} 40%, ${colors['trans-blue'][700]} 40% 70%, ${colors['trans-blue'][600]} 70% 100%)`,
         'asexual-flag': `linear-gradient(135deg, ${colors['asexual'][100]} 30%, ${colors['asexual'][200]} 30% 50%, ${colors['asexual'][300]} 50% 70%, ${colors['asexual'][400]} 70% 100%)`,
+        'toy': `linear-gradient(135deg, ${colors['toy'][100]} 35%, ${colors['toy'][200]} 35% 65%, ${colors['toy'][300]} 65% 100%)`,
+        'windows-xp': `linear-gradient(135deg, ${colors['windows-xp'][100]} 30%, ${colors['windows-xp'][200]} 30% 50%, ${colors['windows-xp'][300]} 50% 70%, ${colors['windows-xp'][400]} 70% 100%)`,
       },
     },
     data: {
