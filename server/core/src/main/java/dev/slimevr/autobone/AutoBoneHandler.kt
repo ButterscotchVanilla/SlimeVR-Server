@@ -14,6 +14,7 @@ import dev.slimevr.poseframeformat.trackerdata.TrackerFrameData
 import dev.slimevr.poseframeformat.trackerdata.TrackerFrames
 import dev.slimevr.posestreamer.BVHFileStream
 import dev.slimevr.posestreamer.PoseFrameStreamer
+import dev.slimevr.tracking.processor.BoneType
 import dev.slimevr.tracking.processor.config.SkeletonConfigManager
 import dev.slimevr.tracking.processor.config.SkeletonConfigOffsets
 import dev.slimevr.tracking.trackers.TrackerPosition
@@ -569,6 +570,9 @@ class AutoBoneHandler(private val server: VRServer) {
 								(key: SkeletonConfigOffsets, newLength: Float?) ->
 							streamer.humanPoseManager.setOffset(key, newLength)
 						}
+					}
+					for (offset in BoneType.values) {
+						streamer.humanPoseManager.computeNodeOffset(offset)
 					}
 					val bvhFolder = File("BVH Recordings")
 					bvhFolder.mkdirs()
