@@ -202,7 +202,7 @@ class AutoBone(server: VRServer) {
 		loadConfigValues()
 
 		// region ### Debug processing options ###
-		val enableConfigHeight = false
+		val enableConfigHeight = true
 		// endregion
 
 		// Set the target heights either from config or calculate them
