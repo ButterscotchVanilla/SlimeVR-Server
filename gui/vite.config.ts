@@ -10,7 +10,7 @@ const versionTag = execSync('git --no-pager tag --sort -taggerdate --points-at H
   .toString()
   .split('\n')[0]
   .trim();
-const lastVersionTag = execSync('git describe --tags --abbrev=0 HEAD').toString().trim();
+const lastVersionTag = 'v0.13.2'; // execSync('git describe --tags --abbrev=0 HEAD').toString().trim();
 // If not empty then it's not clean
 const gitClean = execSync('git status --porcelain').toString() ? false : true;
 
