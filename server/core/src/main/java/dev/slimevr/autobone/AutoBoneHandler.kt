@@ -9,6 +9,7 @@ import dev.slimevr.poseframeformat.PoseRecorder
 import dev.slimevr.poseframeformat.PoseRecorder.RecordingProgress
 import dev.slimevr.poseframeformat.trackerdata.TrackerFrameData
 import dev.slimevr.poseframeformat.trackerdata.TrackerFrames
+import dev.slimevr.tracking.processor.BoneType
 import dev.slimevr.tracking.processor.config.SkeletonConfigManager
 import dev.slimevr.tracking.processor.config.SkeletonConfigOffsets
 import io.eiren.util.StringUtils
@@ -20,6 +21,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.thread
 import kotlin.concurrent.withLock
+import kotlin.math.abs
 
 class AutoBoneHandler(private val server: VRServer) {
 	private val poseRecorder: PoseRecorder = PoseRecorder(server)
@@ -264,6 +266,9 @@ class AutoBoneHandler(private val server: VRServer) {
 			val offsetStats = EnumMap<SkeletonConfigOffsets, StatsCalculator>(
 				SkeletonConfigOffsets::class.java,
 			)
+			val contribStats = EnumMap<BoneType, StatsCalculator>(
+				BoneType::class.java,
+			)
 			val skeletonConfigManagerBuffer = SkeletonConfigManager(false)
 			for ((key, value) in frameRecordings) {
 				LogManager.info("[AutoBone] Processing frames from \"$key\"...")
@@ -292,6 +297,28 @@ class AutoBoneHandler(private val server: VRServer) {
 				printSkeletonRatios(skeletonConfigManagerBuffer)
 
 				LogManager.info("[AutoBone] Length values: ${autoBone.lengthsString}")
+				applyValues()
+
+				val boneContribs = BoneContribution.computeContributingBones(value, server.configManager)
+
+				val sb = StringBuilder("[AutoBone] Bone contributions: {")
+				var first = true
+				for ((bone, contrib) in boneContribs) {
+					val stats = contribStats.getOrPut(bone) { StatsCalculator() }
+					stats.addValue(abs(contrib.sum))
+
+					if (!first) {
+						sb.append(", ")
+					} else {
+						first = false
+					}
+
+					sb.append(bone.name)
+					sb.append(": ")
+					sb.append(contrib.sum)
+				}
+				sb.append('}')
+				LogManager.info(sb.toString())
 			}
 			// Length value stats
 			val averageLengthVals = StringBuilder()
@@ -317,6 +344,25 @@ class AutoBoneHandler(private val server: VRServer) {
 					} (SD ${StringUtils.prettyNumber(errorStats.standardDeviation, 6)})",
 				)
 			// #endregion
+
+			val sb = StringBuilder("[AutoBone] Average bone contributions: {")
+			var first = true
+			for ((bone, contrib) in contribStats) {
+				if (!first) {
+					sb.append(", ")
+				} else {
+					first = false
+				}
+
+				sb.append(bone.name)
+				sb.append(": ")
+				sb.append(contrib.mean)
+				sb.append(" +- ")
+				sb.append(contrib.standardDeviation)
+			}
+			sb.append('}')
+			LogManager.info(sb.toString())
+
 			listeners.forEach { listener: AutoBoneListener -> listener.onAutoBoneEnd(autoBone.offsets) }
 			announceProcessStatus(
 				AutoBoneProcessType.PROCESS,

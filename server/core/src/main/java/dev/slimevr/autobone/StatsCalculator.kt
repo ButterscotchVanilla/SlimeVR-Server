@@ -10,6 +10,8 @@ class StatsCalculator {
 	private var count = 0
 	var mean = 0f
 		private set
+	var sum = 0f
+		private set
 	private var m2 = 0f
 
 	fun reset() {
@@ -24,6 +26,7 @@ class StatsCalculator {
 		mean += delta / count
 		val delta2 = newValue - mean
 		m2 += delta * delta2
+		sum += newValue
 	}
 
 	val variance: Float

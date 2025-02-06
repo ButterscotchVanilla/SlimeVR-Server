@@ -110,19 +110,20 @@ object BoneContribution {
 
 				for (bone in MID_BONES) {
 					val stats = boneMap.getOrPut(bone.affectedOffsets[0]) { StatsCalculator() }
-					stats.addValue(getSlideDot(step.skeleton1, step.skeleton2, bone, slideLUnit, slideRUnit))
+					val offset = getBoneLocalTailDir(step.skeleton1, step.skeleton2, bone.affectedOffsets[0])
+					stats.addValue(getSlideDot(step.skeleton1, step.skeleton2, bone, slideLUnit, slideRUnit) * (offset?.len() ?: 1f) * ((slideLLen + slideLLen) / 2f))
 				}
 
 				for (bone in LEFT_BONES) {
 					val stats = boneMap.getOrPut(bone) { StatsCalculator() }
 					val offset = getBoneLocalTailDir(step.skeleton1, step.skeleton2, bone)
-					stats.addValue(if (slideLUnit != null && offset != null) slideLUnit.dot(offset) else 0f)
+					stats.addValue(if (slideLUnit != null && offset != null) slideLUnit.dot(offset) * offset.len() * slideLLen else 0f)
 				}
 
 				for (bone in RIGHT_BONES) {
 					val stats = boneMap.getOrPut(bone) { StatsCalculator() }
 					val offset = getBoneLocalTailDir(step.skeleton1, step.skeleton2, bone)
-					stats.addValue(if (slideRUnit != null && offset != null) slideRUnit.dot(offset) else 0f)
+					stats.addValue(if (slideRUnit != null && offset != null) slideRUnit.dot(offset) * offset.len() * slideRLen else 0f)
 				}
 			},
 			data = Unit,
