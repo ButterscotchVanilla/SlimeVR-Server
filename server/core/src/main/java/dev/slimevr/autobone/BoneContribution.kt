@@ -38,6 +38,20 @@ object BoneContribution {
 	}
 
 	/**
+	 * Computes the direction of the bone tail's movement between skeletons 1 and 2.
+	 */
+	fun getBoneLocalTailDir2(
+		skeleton1: HumanPoseManager,
+		skeleton2: HumanPoseManager,
+		boneType: BoneType,
+	): Pair<Vector3?, Float> {
+		val boneOff = getBoneLocalTail(skeleton2, boneType) - getBoneLocalTail(skeleton1, boneType)
+		val boneOffLen = boneOff.len()
+		// If the offset is approx 0, just return null so it can be easily ignored
+		return Pair(if (boneOffLen > MIN_SLIDE_DIST) boneOff / boneOffLen else null, boneOffLen)
+	}
+
+	/**
 	 * Predicts how much the provided config should be affecting the slide offsets
 	 * of the left and right ankles.
 	 */
@@ -110,20 +124,20 @@ object BoneContribution {
 
 				for (bone in MID_BONES) {
 					val stats = boneMap.getOrPut(bone.affectedOffsets[0]) { StatsCalculator() }
-					val offset = getBoneLocalTailDir(step.skeleton1, step.skeleton2, bone.affectedOffsets[0])
-					stats.addValue(getSlideDot(step.skeleton1, step.skeleton2, bone, slideLUnit, slideRUnit) * (offset?.len() ?: 1f) * ((slideLLen + slideLLen) / 2f))
+					val offset = getBoneLocalTailDir2(step.skeleton1, step.skeleton2, bone.affectedOffsets[0])
+					stats.addValue(getSlideDot(step.skeleton1, step.skeleton2, bone, slideLUnit, slideRUnit) * offset.second * ((slideLLen + slideRLen) / 2f))
 				}
 
 				for (bone in LEFT_BONES) {
 					val stats = boneMap.getOrPut(bone) { StatsCalculator() }
-					val offset = getBoneLocalTailDir(step.skeleton1, step.skeleton2, bone)
-					stats.addValue(if (slideLUnit != null && offset != null) slideLUnit.dot(offset) * offset.len() * slideLLen else 0f)
+					val offset = getBoneLocalTailDir2(step.skeleton1, step.skeleton2, bone)
+					stats.addValue(if (slideLUnit != null && offset.first != null) slideLUnit.dot(offset.first as Vector3) * offset.second * slideLLen else 0f)
 				}
 
 				for (bone in RIGHT_BONES) {
 					val stats = boneMap.getOrPut(bone) { StatsCalculator() }
-					val offset = getBoneLocalTailDir(step.skeleton1, step.skeleton2, bone)
-					stats.addValue(if (slideRUnit != null && offset != null) slideRUnit.dot(offset) * offset.len() * slideRLen else 0f)
+					val offset = getBoneLocalTailDir2(step.skeleton1, step.skeleton2, bone)
+					stats.addValue(if (slideRUnit != null && offset.first != null) slideRUnit.dot(offset.first as Vector3) * offset.second * slideRLen else 0f)
 				}
 			},
 			data = Unit,
