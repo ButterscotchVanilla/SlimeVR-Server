@@ -2,9 +2,13 @@ package dev.slimevr.autobone
 
 import dev.slimevr.autobone.AutoBone.Companion.MIN_SLIDE_DIST
 import dev.slimevr.autobone.AutoBone.Companion.SYMM_CONFIGS
+import dev.slimevr.config.AutoBoneConfig
+import dev.slimevr.config.ConfigManager
+import dev.slimevr.poseframeformat.PoseFrames
 import dev.slimevr.tracking.processor.BoneType
 import dev.slimevr.tracking.processor.HumanPoseManager
 import dev.slimevr.tracking.processor.config.SkeletonConfigOffsets
+import dev.slimevr.tracking.trackers.TrackerRole
 import io.github.axisangles.ktmath.Vector3
 
 object BoneContribution {
@@ -81,4 +85,62 @@ object BoneContribution {
 
 		return slideDot / 2f
 	}
+
+	fun computeContributingBones(frames: PoseFrames, serverConfig: ConfigManager): Map<BoneType, StatsCalculator> {
+		val boneMap = mutableMapOf<BoneType, StatsCalculator>()
+
+		val config = AutoBoneConfig()
+		config.calcInitError = false
+		config.randomizeFrameOrder = true
+
+		val step = PoseFrameStep<Unit>(
+			config = config,
+			serverConfig = serverConfig,
+			frames = frames,
+			onStep = { step ->
+				val slideL = step.skeleton2.getComputedTracker(TrackerRole.LEFT_FOOT).position -
+					step.skeleton1.getComputedTracker(TrackerRole.LEFT_FOOT).position
+				val slideLLen = slideL.len()
+				val slideLUnit: Vector3? = if (slideLLen > MIN_SLIDE_DIST) slideL / slideLLen else null
+
+				val slideR = step.skeleton2.getComputedTracker(TrackerRole.RIGHT_FOOT).position -
+					step.skeleton1.getComputedTracker(TrackerRole.RIGHT_FOOT).position
+				val slideRLen = slideR.len()
+				val slideRUnit: Vector3? = if (slideRLen > MIN_SLIDE_DIST) slideR / slideRLen else null
+
+				for (bone in MID_BONES) {
+					val stats = boneMap.getOrPut(bone.affectedOffsets[0]) { StatsCalculator() }
+					stats.addValue(getSlideDot(step.skeleton1, step.skeleton2, bone, slideLUnit, slideRUnit))
+				}
+
+				for (bone in LEFT_BONES) {
+					val stats = boneMap.getOrPut(bone) { StatsCalculator() }
+					val offset = getBoneLocalTailDir(step.skeleton1, step.skeleton2, bone)
+					stats.addValue(if (slideLUnit != null && offset != null) slideLUnit.dot(offset) else 0f)
+				}
+
+				for (bone in RIGHT_BONES) {
+					val stats = boneMap.getOrPut(bone) { StatsCalculator() }
+					val offset = getBoneLocalTailDir(step.skeleton1, step.skeleton2, bone)
+					stats.addValue(if (slideRUnit != null && offset != null) slideRUnit.dot(offset) else 0f)
+				}
+			},
+			data = Unit,
+		)
+
+		PoseFrameIterator.iterateFrames(step)
+
+		return boneMap
+	}
+
+	val MID_BONES = arrayOf(
+		SkeletonConfigOffsets.HEAD,
+		SkeletonConfigOffsets.NECK,
+		SkeletonConfigOffsets.UPPER_CHEST,
+		SkeletonConfigOffsets.CHEST,
+		SkeletonConfigOffsets.WAIST,
+		SkeletonConfigOffsets.HIP,
+	)
+	val LEFT_BONES = arrayOf(BoneType.LEFT_HIP, BoneType.LEFT_UPPER_LEG, BoneType.LEFT_LOWER_LEG)
+	val RIGHT_BONES = arrayOf(BoneType.RIGHT_HIP, BoneType.RIGHT_UPPER_LEG, BoneType.RIGHT_LOWER_LEG)
 }
