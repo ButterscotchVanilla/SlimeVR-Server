@@ -305,7 +305,7 @@ class AutoBoneHandler(private val server: VRServer) {
 				var first = true
 				for ((bone, contrib) in boneContribs) {
 					val stats = contribStats.getOrPut(bone) { StatsCalculator() }
-					stats.addValue(abs(contrib.sum))
+					stats.addValue(contrib.sum)
 
 					if (!first) {
 						sb.append(", ")
