@@ -1,6 +1,7 @@
 package dev.slimevr.tracking.processor.config
 
 import dev.slimevr.VRServer.Companion.instance
+import dev.slimevr.VRServer.Companion.instanceInitialized
 import dev.slimevr.autobone.AutoBone
 import dev.slimevr.autobone.errors.BodyProportionError.Companion.proportionLimitMap
 import dev.slimevr.config.ConfigManager
@@ -415,14 +416,14 @@ class SkeletonConfigManager(
 
 		// Remove from config to use default if they change in the future.
 		Arrays.fill(changedToggles, false)
-		for (value in SkeletonConfigToggles.values) {
-			instance.configManager
-				.vrConfig
-				.skeleton
-				.getToggles()
-				.remove(value.configKey)
-			// Set default in skeleton
-			setToggle(value, value.defaultValue)
+		if (instanceInitialized) {
+			for (value in SkeletonConfigToggles.values) {
+				instance.configManager
+					.vrConfig
+					.skeleton
+					.getToggles()
+					.remove(value.configKey)
+			}
 		}
 	}
 
@@ -438,14 +439,14 @@ class SkeletonConfigManager(
 
 		// Remove from config to use default if they change in the future.
 		Arrays.fill(changedValues, false)
-		for (value in SkeletonConfigValues.values) {
-			instance.configManager
-				.vrConfig
-				.skeleton
-				.getValues()
-				.remove(value.configKey)
-			// Set default in skeleton
-			setValue(value, value.defaultValue)
+		if (instanceInitialized) {
+			for (value in SkeletonConfigValues.values) {
+				instance.configManager
+					.vrConfig
+					.skeleton
+					.getValues()
+					.remove(value.configKey)
+			}
 		}
 	}
 
@@ -521,6 +522,8 @@ class SkeletonConfigManager(
 	}
 
 	fun save() {
+		require(instanceInitialized) { "VRServer instance is not initialized, config cannot be saved." }
+
 		val skeletonConfig = instance.configManager
 			.vrConfig
 			.skeleton
