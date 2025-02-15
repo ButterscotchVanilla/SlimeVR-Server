@@ -144,10 +144,10 @@ class AutoBone(private val server: VRServer) {
 		skeleton1: HumanPoseManager,
 		skeleton2: HumanPoseManager,
 		boneType: BoneType,
-	): Vector3? {
+	): Pair<Vector3?, Float> {
 		val boneOff = getBoneLocalTail(skeleton2, boneType) - getBoneLocalTail(skeleton1, boneType)
 		val boneOffLen = boneOff.len()
-		return if (boneOffLen > MIN_SLIDE_DIST) boneOff / boneOffLen else null
+		return Pair(if (boneOffLen > MIN_SLIDE_DIST) boneOff / boneOffLen else null, boneOffLen)
 	}
 
 	/**
@@ -166,7 +166,7 @@ class AutoBone(private val server: VRServer) {
 		var boneOffL: Vector3? = null
 
 		if (slideL != null) {
-			boneOffL = getBoneLocalTailDir(skeleton1, skeleton2, config.affectedOffsets[0])
+			boneOffL = getBoneLocalTailDir(skeleton1, skeleton2, config.affectedOffsets[0]).first
 
 			if (boneOffL != null) {
 				slideDot += slideL.dot(boneOffL)
@@ -178,13 +178,13 @@ class AutoBone(private val server: VRServer) {
 			// SkeletonConfigOffsets is set up to only affect one BoneType, make sure no
 			// changes to SkeletonConfigOffsets goes against this assumption, please!
 			val boneOffR = if (SYMM_CONFIGS.contains(config)) {
-				getBoneLocalTailDir(skeleton1, skeleton2, config.affectedOffsets[1])
+				getBoneLocalTailDir(skeleton1, skeleton2, config.affectedOffsets[1]).first
 			} else if (slideL != null) {
 				// Use cached offset if slideL was used
 				boneOffL
 			} else {
 				// Compute offset if missing because of slideL
-				getBoneLocalTailDir(skeleton1, skeleton2, config.affectedOffsets[0])
+				getBoneLocalTailDir(skeleton1, skeleton2, config.affectedOffsets[0]).first
 			}
 
 			if (boneOffR != null) {
@@ -628,20 +628,26 @@ class AutoBone(private val server: VRServer) {
 			// Find matching tracker on the second skeleton
 			val tracker2 = trainingStep.framePlayer2.playerTrackers.firstOrNull { it.tracker.trackerPosition == tp } ?: continue
 
-			val lBone: Float? = leftTrackers[tp]?.let {
-				val boneOffL = getBoneLocalTailDir(skeleton1, skeleton2, it)
-				if (boneOffL != null) {
-					slideL.dot(boneOffL)
-				} else {
-					null
+			val lBone: Float? = slideLUnit?.let { slideL ->
+				leftTrackers[tp]?.let {
+					val off = getBoneLocalTailDir(skeleton1, skeleton2, it)
+					val vec = off.first
+					if (vec != null) {
+						slideL.dot(vec) * off.second * slideLLen
+					} else {
+						null
+					}
 				}
 			}
-			val rBone: Float? = rightTrackers[tp]?.let {
-				val boneOffR = getBoneLocalTailDir(skeleton1, skeleton2, it)
-				if (boneOffR != null) {
-					slideR.dot(boneOffR)
-				} else {
-					null
+			val rBone: Float? = slideRUnit?.let { slideR ->
+				rightTrackers[tp]?.let {
+					val off = getBoneLocalTailDir(skeleton1, skeleton2, it)
+					val vec = off.first
+					if (vec != null) {
+						slideR.dot(vec) * off.second * slideRLen
+					} else {
+						null
+					}
 				}
 			}
 			val dot = if (lBone != null && rBone != null) {
@@ -649,6 +655,7 @@ class AutoBone(private val server: VRServer) {
 			} else {
 				lBone ?: rBone ?: continue
 			}
+			val paramAdj = adjustVal * abs(dot)
 
 			val trackerChange = TrackerAdjustments(
 				tracker1,
@@ -658,11 +665,6 @@ class AutoBone(private val server: VRServer) {
 			)
 			for ((i, param) in trackerParams.withIndex()) {
 				val initVal = param.getVal(tracker1)
-
-				val paramAdj = adjustVal * abs(dot)
-				if (paramAdj < 0.0001f) {
-					continue
-				}
 
 				val posVal = (initVal + paramAdj).coerceIn(-1f, 1f)
 				param.setVal(tracker1, posVal)
