@@ -7,17 +7,18 @@ import dev.slimevr.config.AutoBoneConfig
 import dev.slimevr.config.SkeletonConfig
 import dev.slimevr.poseframeformat.PoseFrameIO
 import dev.slimevr.poseframeformat.PoseFrames
+import dev.slimevr.poseframeformat.player.PlayerTracker
 import dev.slimevr.tracking.processor.BoneType
 import dev.slimevr.tracking.processor.HumanPoseManager
 import dev.slimevr.tracking.processor.config.SkeletonConfigManager
 import dev.slimevr.tracking.processor.config.SkeletonConfigOffsets
+import dev.slimevr.tracking.trackers.TrackerPosition
 import dev.slimevr.tracking.trackers.TrackerRole
 import io.eiren.util.OperatingSystem
 import io.eiren.util.StringUtils
 import io.eiren.util.collections.FastList
 import io.eiren.util.logging.LogManager
 import io.github.axisangles.ktmath.Vector3
-import org.apache.commons.lang3.tuple.Pair
 import java.io.File
 import java.util.*
 import java.util.function.Consumer
@@ -43,6 +44,38 @@ class AutoBone(private val server: VRServer) {
 			SkeletonConfigOffsets.UPPER_LEG,
 			SkeletonConfigOffsets.LOWER_LEG,
 		),
+	)
+
+	val adjustTrackers = FastList(
+		arrayOf(
+			TrackerPosition.NECK,
+			TrackerPosition.UPPER_CHEST,
+			TrackerPosition.CHEST,
+			TrackerPosition.WAIST,
+			TrackerPosition.HIP,
+			TrackerPosition.LEFT_UPPER_LEG,
+			TrackerPosition.LEFT_LOWER_LEG,
+			TrackerPosition.RIGHT_UPPER_LEG,
+			TrackerPosition.RIGHT_LOWER_LEG,
+		),
+	)
+	val leftTrackers = mapOf(
+		Pair(TrackerPosition.NECK, BoneType.NECK),
+		Pair(TrackerPosition.UPPER_CHEST, BoneType.UPPER_CHEST),
+		Pair(TrackerPosition.CHEST, BoneType.CHEST),
+		Pair(TrackerPosition.WAIST, BoneType.WAIST),
+		Pair(TrackerPosition.HIP, BoneType.HIP),
+		Pair(TrackerPosition.LEFT_UPPER_LEG, BoneType.LEFT_UPPER_LEG),
+		Pair(TrackerPosition.LEFT_LOWER_LEG, BoneType.LEFT_LOWER_LEG),
+	)
+	val rightTrackers = mapOf(
+		Pair(TrackerPosition.NECK, BoneType.NECK),
+		Pair(TrackerPosition.UPPER_CHEST, BoneType.UPPER_CHEST),
+		Pair(TrackerPosition.CHEST, BoneType.CHEST),
+		Pair(TrackerPosition.WAIST, BoneType.WAIST),
+		Pair(TrackerPosition.HIP, BoneType.HIP),
+		Pair(TrackerPosition.RIGHT_UPPER_LEG, BoneType.RIGHT_UPPER_LEG),
+		Pair(TrackerPosition.RIGHT_LOWER_LEG, BoneType.RIGHT_LOWER_LEG),
 	)
 
 	var estimatedHeight: Float = 1f
@@ -438,6 +471,12 @@ class AutoBone(private val server: VRServer) {
 				.info(
 					"[AutoBone] Target height: ${trainingStep.targetHmdHeight}, Estimated height: $estimatedHeight",
 				)
+			for (tracker1 in trainingStep.framePlayer1.playerTrackers) {
+				if (!adjustTrackers.contains(tracker1.tracker.trackerPosition)) {
+					continue
+				}
+				LogManager.info("[AutoBone] Tracker [${tracker1.tracker.trackerPosition?.designation}] mounting: ${tracker1.mounting}, gyro fix: {w: ${tracker1.w}, x: ${tracker1.x}, y: ${tracker1.y}, z: ${tracker1.z}}")
+			}
 		}
 
 		if (trainingStep.epochCallback != null) {
@@ -449,6 +488,49 @@ class AutoBone(private val server: VRServer) {
 			trainingStep.epochCallback.accept(Epoch(epoch + 1, config.numEpochs, errorStats, scaledOffsets))
 		}
 	}
+
+	enum class TrackerParam(val setVal: (PlayerTracker, Float) -> Unit, val getVal: (PlayerTracker) -> Float) {
+		MOUNTING({ t, v ->
+			t.mounting = v
+		}, { t ->
+			t.mounting
+		}),
+		W({ t, v ->
+			t.w = v
+		}, { t ->
+			t.w
+		}),
+		X({ t, v ->
+			t.x = v
+		}, { t ->
+			t.x
+		}),
+		Y({ t, v ->
+			t.y = v
+		}, { t ->
+			t.y
+		}),
+		Z({ t, v ->
+			t.z = v
+		}, { t ->
+			t.z
+		}),
+	}
+
+	val trackerParams = arrayOf(
+		TrackerParam.MOUNTING,
+		TrackerParam.W,
+		TrackerParam.X,
+		TrackerParam.Y,
+		TrackerParam.Z,
+	)
+
+	data class TrackerAdjustments(
+		val tracker1: PlayerTracker,
+		val tracker2: PlayerTracker,
+		val values: FloatArray,
+		val changedVals: BooleanArray,
+	)
 
 	private fun internalIter(trainingStep: AutoBoneStep) {
 		// Pull frequently used variables out of trainingStep to reduce call length
@@ -531,6 +613,102 @@ class AutoBone(private val server: VRServer) {
 			skeleton1.getComputedTracker(TrackerRole.RIGHT_FOOT).position
 		val slideRLen = slideR.len()
 		val slideRUnit: Vector3? = if (slideRLen > MIN_SLIDE_DIST) slideR / slideRLen else null
+
+		// Try adjusting tracker parameters
+		val trackerChanges = FastList<TrackerAdjustments>()
+		for (tracker1 in trainingStep.framePlayer1.playerTrackers) {
+			if (trainingStep.curEpoch < 0) {
+				break
+			}
+			val tp = tracker1.tracker.trackerPosition
+			if (tp == null || !adjustTrackers.contains(tp)) {
+				continue
+			}
+
+			// Find matching tracker on the second skeleton
+			val tracker2 = trainingStep.framePlayer2.playerTrackers.firstOrNull { it.tracker.trackerPosition == tp } ?: continue
+
+			val lBone: Float? = leftTrackers[tp]?.let {
+				val boneOffL = getBoneLocalTailDir(skeleton1, skeleton2, it)
+				if (boneOffL != null) {
+					slideL.dot(boneOffL)
+				} else {
+					null
+				}
+			}
+			val rBone: Float? = rightTrackers[tp]?.let {
+				val boneOffR = getBoneLocalTailDir(skeleton1, skeleton2, it)
+				if (boneOffR != null) {
+					slideR.dot(boneOffR)
+				} else {
+					null
+				}
+			}
+			val dot = if (lBone != null && rBone != null) {
+				(lBone + rBone) / 2f
+			} else {
+				lBone ?: rBone ?: continue
+			}
+
+			val trackerChange = TrackerAdjustments(
+				tracker1,
+				tracker2,
+				FloatArray(trackerParams.size),
+				BooleanArray(trackerParams.size),
+			)
+			for ((i, param) in trackerParams.withIndex()) {
+				val initVal = param.getVal(tracker1)
+
+				val paramAdj = adjustVal * abs(dot)
+				if (paramAdj < 0.0001f) {
+					continue
+				}
+
+				val posVal = (initVal + paramAdj).coerceIn(-1f, 1f)
+				param.setVal(tracker1, posVal)
+				param.setVal(tracker2, posVal)
+
+				// Update the skeleton poses
+				skeleton1.update()
+				skeleton2.update()
+				val errPos = getErrorDeriv(trainingStep)
+
+				val negVal = (initVal - paramAdj).coerceIn(-1f, 1f)
+				param.setVal(tracker1, negVal)
+				param.setVal(tracker2, negVal)
+
+				// Update the skeleton poses
+				skeleton1.update()
+				skeleton2.update()
+				val errNeg = getErrorDeriv(trainingStep)
+
+				// Apply the param later
+				if (errPos < errorDeriv && errPos < errNeg) {
+					trackerChange.values[i] = posVal
+					trackerChange.changedVals[i] = true
+				} else if (errNeg < errorDeriv) {
+					trackerChange.values[i] = negVal
+					trackerChange.changedVals[i] = true
+				}
+
+				// Reset param
+				param.setVal(tracker1, initVal)
+				param.setVal(tracker2, initVal)
+			}
+			trackerChanges.add(trackerChange)
+		}
+
+		// Apply changes
+		for (change in trackerChanges) {
+			for ((i, param) in trackerParams.withIndex()) {
+				if (!change.changedVals[i]) {
+					continue
+				}
+				val paramVal = change.values[i]
+				param.setVal(change.tracker1, paramVal)
+				param.setVal(change.tracker2, paramVal)
+			}
+		}
 
 		val intermediateOffsets = EnumMap(offsets)
 		for (entry in intermediateOffsets.entries) {
@@ -758,7 +936,7 @@ class AutoBone(private val server: VRServer) {
 			if (frames == null) {
 				LogManager.severe("Reading frames from \"${file.path}\" failed...")
 			} else {
-				recordings.add(Pair.of(file.name, frames))
+				recordings.add(Pair(file.name, frames))
 			}
 		}
 		return recordings

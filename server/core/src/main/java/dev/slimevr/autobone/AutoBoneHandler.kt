@@ -274,7 +274,7 @@ class AutoBoneHandler(private val server: VRServer) {
 				if (framesFuture != null) {
 					announceProcessStatus(AutoBoneProcessType.PROCESS, "Waiting for recording...")
 					val frames = framesFuture.get()
-					frameRecordings.add(Pair.of("<Recording>", frames))
+					frameRecordings.add(Pair("<Recording>", frames))
 				} else {
 					announceProcessStatus(
 						AutoBoneProcessType.PROCESS,

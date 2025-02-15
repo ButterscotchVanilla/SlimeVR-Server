@@ -2,8 +2,20 @@ package dev.slimevr.poseframeformat.player
 
 import dev.slimevr.poseframeformat.trackerdata.TrackerFrames
 import dev.slimevr.tracking.trackers.Tracker
+import io.github.axisangles.ktmath.Quaternion
+import kotlin.math.abs
 
-class PlayerTracker(val trackerFrames: TrackerFrames, val tracker: Tracker, private var internalCursor: Int = 0, private var internalScale: Float = 1f) {
+class PlayerTracker(
+	val trackerFrames: TrackerFrames,
+	val tracker: Tracker,
+	private var internalCursor: Int = 0,
+	private var internalScale: Float = 1f,
+	private var internalMounting: Float = 0f,
+	private var internalW: Float = 1f,
+	private var internalX: Float = 0f,
+	private var internalY: Float = 0f,
+	private var internalZ: Float = 0f,
+) {
 
 	var cursor: Int
 		get() = internalCursor
@@ -17,6 +29,41 @@ class PlayerTracker(val trackerFrames: TrackerFrames, val tracker: Tracker, priv
 		get() = internalScale
 		set(value) {
 			internalScale = value
+			setTrackerStateFromIndex()
+		}
+
+	var mounting: Float
+		get() = internalMounting
+		set(value) {
+			internalMounting = value
+			setTrackerStateFromIndex()
+		}
+
+	var w: Float
+		get() = internalW
+		set(value) {
+			internalW = value
+			setTrackerStateFromIndex()
+		}
+
+	var x: Float
+		get() = internalX
+		set(value) {
+			internalX = value
+			setTrackerStateFromIndex()
+		}
+
+	var y: Float
+		get() = internalY
+		set(value) {
+			internalY = value
+			setTrackerStateFromIndex()
+		}
+
+	var z: Float
+		get() = internalZ
+		set(value) {
+			internalZ = value
 			setTrackerStateFromIndex()
 		}
 
@@ -56,7 +103,17 @@ class PlayerTracker(val trackerFrames: TrackerFrames, val tracker: Tracker, priv
 
 		val rotation = frame.tryGetRotation()
 		if (rotation != null) {
-			tracker.setRotation(rotation)
+			if (internalMounting != 0f || internalY != 0f) {
+				val mountOffset = Quaternion(1f - abs(internalMounting), 0f, internalMounting, 0f).unit()
+				val gyroFix = if (w != 0f || x != 0f || y != 0f || z != 0f) {
+					Quaternion(internalW, internalX, internalY, internalZ).unit()
+				} else {
+					Quaternion.IDENTITY
+				}
+				tracker.setRotation(mountOffset.inv() * ((gyroFix * rotation) * mountOffset))
+			} else {
+				tracker.setRotation(rotation)
+			}
 		}
 
 		val position = frame.tryGetPosition()
