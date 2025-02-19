@@ -897,6 +897,14 @@ class AutoBone(private val server: VRServer) {
 					config.positionOffsetErrorFactor
 				)
 		}
+
+		sumError += (
+			abs(trainingStep.skeleton1.getBone(BoneType.LEFT_LOWER_LEG).getTailPosition().y) +
+				abs(trainingStep.skeleton1.getBone(BoneType.RIGHT_LOWER_LEG).getTailPosition().y) +
+				abs(trainingStep.skeleton2.getBone(BoneType.LEFT_LOWER_LEG).getTailPosition().y) +
+				abs(trainingStep.skeleton2.getBone(BoneType.RIGHT_LOWER_LEG).getTailPosition().y)
+			) / 4f
+
 		return sumError
 	}
 
