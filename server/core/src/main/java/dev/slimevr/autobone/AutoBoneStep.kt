@@ -1,10 +1,13 @@
 package dev.slimevr.autobone
 
+import dev.slimevr.autobone.AutoBone.TrackerAdjustments
+import dev.slimevr.autobone.AutoBone.TrackerCalibration
 import dev.slimevr.config.AutoBoneConfig
 import dev.slimevr.config.ConfigManager
 import dev.slimevr.poseframeformat.PoseFrames
 import dev.slimevr.poseframeformat.player.TrackerFramesPlayer
 import dev.slimevr.tracking.processor.HumanPoseManager
+import io.eiren.util.collections.FastList
 import java.util.function.Consumer
 
 class AutoBoneStep(
@@ -24,6 +27,8 @@ class AutoBoneStep(
 	val framePlayer1 = TrackerFramesPlayer(frames)
 	val framePlayer2 = TrackerFramesPlayer(frames)
 
+	val trackerAdj = FastList<TrackerAdjustments>()
+
 	val trackers1 = framePlayer1.trackers.toList()
 	val trackers2 = framePlayer2.trackers.toList()
 
@@ -39,6 +44,19 @@ class AutoBoneStep(
 		// Disable leg tweaks and IK solver, these will mess with the resulting positions
 		skeleton1.setLegTweaksEnabled(false)
 		skeleton2.setLegTweaksEnabled(false)
+
+		for (tracker1 in framePlayer1.playerTrackers) {
+			val tp = tracker1.tracker.trackerPosition ?: continue
+			val tracker2 = framePlayer2.playerTrackers.find { it.tracker.trackerPosition == tp } ?: continue
+
+			trackerAdj.add(
+				TrackerAdjustments(
+					tracker1,
+					tracker2,
+					TrackerCalibration(tp),
+				),
+			)
+		}
 	}
 
 	fun setCursors(cursor1: Int, cursor2: Int, updatePlayerCursors: Boolean) {

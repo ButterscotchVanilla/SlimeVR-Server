@@ -110,7 +110,7 @@ class PlayerTracker(
 				} else {
 					Quaternion.IDENTITY
 				}
-				tracker.setRotation(mountOffset.inv() * ((gyroFix * rotation) * mountOffset))
+				tracker.setRotation(gyroFix * (mountOffset.inv() * (rotation * mountOffset)))
 			} else {
 				tracker.setRotation(rotation)
 			}

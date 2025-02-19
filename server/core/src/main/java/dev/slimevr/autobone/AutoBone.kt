@@ -392,19 +392,11 @@ class AutoBone(private val server: VRServer) {
 		}
 
 		val calibs = FastList<TrackerCalibration>()
-		for (tracker in trainingStep.framePlayer1.playerTrackers) {
-			val tp = tracker.tracker.trackerPosition
-			if (tp == null || !adjustTrackers.contains(tp)) continue
+		for (tracker in trainingStep.trackerAdj) {
+			if (!adjustTrackers.contains(tracker.cal.pos)) continue
 
 			calibs.add(
-				TrackerCalibration(
-					tp,
-					tracker.mounting,
-					tracker.w,
-					tracker.x,
-					tracker.y,
-					tracker.z,
-				),
+				tracker.cal,
 			)
 		}
 
@@ -489,11 +481,11 @@ class AutoBone(private val server: VRServer) {
 				.info(
 					"[AutoBone] Target height: ${trainingStep.targetHmdHeight}, Estimated height: $estimatedHeight",
 				)
-			for (tracker1 in trainingStep.framePlayer1.playerTrackers) {
-				if (!adjustTrackers.contains(tracker1.tracker.trackerPosition)) {
+			for (tracker in trainingStep.trackerAdj) {
+				if (!adjustTrackers.contains(tracker.cal.pos)) {
 					continue
 				}
-				LogManager.info("[AutoBone] Tracker [${tracker1.tracker.trackerPosition?.designation}] mounting: ${tracker1.mounting}, gyro fix: {w: ${tracker1.w}, x: ${tracker1.x}, y: ${tracker1.y}, z: ${tracker1.z}}")
+				LogManager.info("[AutoBone] Tracker [${tracker.cal.pos}] mounting: ${tracker.cal.mounting}, gyro fix: {w: ${tracker.cal.w}, x: ${tracker.cal.x}, y: ${tracker.cal.y}, z: ${tracker.cal.z}}")
 			}
 		}
 
@@ -537,27 +529,43 @@ class AutoBone(private val server: VRServer) {
 
 	val trackerParams = arrayOf(
 		TrackerParam.MOUNTING,
-		TrackerParam.W,
-		TrackerParam.X,
-		TrackerParam.Y,
-		TrackerParam.Z,
 	)
 
 	data class TrackerAdjustments(
-		val tracker1: PlayerTracker,
-		val tracker2: PlayerTracker,
-		val values: FloatArray,
-		val changedVals: BooleanArray,
+		val track1: PlayerTracker,
+		val track2: PlayerTracker,
+		val cal: TrackerCalibration,
 	)
 
 	data class TrackerCalibration(
-		val tracker: TrackerPosition,
-		val mounting: Float,
-		val w: Float,
-		val x: Float,
-		val y: Float,
-		val z: Float,
-	)
+		val pos: TrackerPosition,
+		var mounting: Float = 0f,
+		var w: Float = 1f,
+		var x: Float = 0f,
+		var y: Float = 0f,
+		var z: Float = 0f,
+	) {
+		fun applyMount(track: PlayerTracker) {
+			track.mounting = mounting
+		}
+
+		fun applyGyro(track: PlayerTracker) {
+			track.w = w
+			track.x = x
+			track.y = y
+			track.z = z
+		}
+
+		fun setFrom(param: TrackerParam, value: Float) {
+			when (param) {
+				TrackerParam.MOUNTING -> mounting = value
+				TrackerParam.W -> w = value
+				TrackerParam.X -> x = value
+				TrackerParam.Y -> y = value
+				TrackerParam.Z -> z = value
+			}
+		}
+	}
 
 	private fun internalIter(trainingStep: AutoBoneStep) {
 		// Pull frequently used variables out of trainingStep to reduce call length
@@ -643,17 +651,17 @@ class AutoBone(private val server: VRServer) {
 
 		// Try adjusting tracker parameters
 		val trackerChanges = FastList<TrackerAdjustments>()
-		for (tracker1 in trainingStep.framePlayer1.playerTrackers) {
+		for (adj in trainingStep.trackerAdj) {
 			if (trainingStep.curEpoch < 0) {
 				break
 			}
-			val tp = tracker1.tracker.trackerPosition
-			if (tp == null || !adjustTrackers.contains(tp)) {
+			val tp = adj.cal.pos
+			if (!adjustTrackers.contains(tp)) {
 				continue
 			}
 
-			// Find matching tracker on the second skeleton
-			val tracker2 = trainingStep.framePlayer2.playerTrackers.find { it.tracker.trackerPosition == tp } ?: continue
+			val tracker1 = adj.track1
+			val tracker2 = adj.track2
 
 			var dot = 0f
 			var dotCount = 0
@@ -685,13 +693,15 @@ class AutoBone(private val server: VRServer) {
 
 			val paramAdj = adjustVal * abs(dot / dotCount)
 
-			val trackerChange = TrackerAdjustments(
-				tracker1,
-				tracker2,
-				FloatArray(trackerParams.size),
-				BooleanArray(trackerParams.size),
-			)
 			for ((i, param) in trackerParams.withIndex()) {
+				if (i > 0) {
+					adj.cal.applyGyro(tracker1)
+					adj.cal.applyGyro(tracker2)
+				} else {
+					adj.cal.applyMount(tracker1)
+					adj.cal.applyMount(tracker2)
+				}
+
 				val initVal = param.getVal(tracker1)
 
 				val posVal = (initVal + paramAdj).coerceIn(-1f, 1f)
@@ -714,29 +724,23 @@ class AutoBone(private val server: VRServer) {
 
 				// Apply the param later
 				if (errPos < errorDeriv && errPos < errNeg) {
-					trackerChange.values[i] = posVal
-					trackerChange.changedVals[i] = true
+					adj.cal.setFrom(param, posVal)
 				} else if (errNeg < errorDeriv) {
-					trackerChange.values[i] = negVal
-					trackerChange.changedVals[i] = true
+					adj.cal.setFrom(param, negVal)
 				}
 
 				// Reset param
-				param.setVal(tracker1, initVal)
-				param.setVal(tracker2, initVal)
-			}
-			trackerChanges.add(trackerChange)
-		}
+				tracker1.mounting = 0f
+				tracker1.w = 1f
+				tracker1.x = 0f
+				tracker1.y = 0f
+				tracker1.z = 0f
 
-		// Apply changes
-		for (change in trackerChanges) {
-			for ((i, param) in trackerParams.withIndex()) {
-				if (!change.changedVals[i]) {
-					continue
-				}
-				val paramVal = change.values[i]
-				param.setVal(change.tracker1, paramVal)
-				param.setVal(change.tracker2, paramVal)
+				tracker2.mounting = 0f
+				tracker2.w = 1f
+				tracker2.x = 0f
+				tracker2.y = 0f
+				tracker2.z = 0f
 			}
 		}
 

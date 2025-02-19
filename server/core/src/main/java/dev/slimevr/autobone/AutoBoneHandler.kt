@@ -566,7 +566,7 @@ class AutoBoneHandler(private val server: VRServer) {
 							streamer.humanPoseManager.setOffset(key, newLength)
 						}
 						for (calib in autoBoneResults.trackerCalibs) {
-							val tracker = streamer.trackerFramesPlayer.playerTrackers.find { it.tracker.trackerPosition == calib.tracker } ?: continue
+							val tracker = streamer.trackerFramesPlayer.playerTrackers.find { it.tracker.trackerPosition == calib.pos } ?: continue
 							tracker.mounting = calib.mounting
 							tracker.w = calib.w
 							tracker.x = calib.x
