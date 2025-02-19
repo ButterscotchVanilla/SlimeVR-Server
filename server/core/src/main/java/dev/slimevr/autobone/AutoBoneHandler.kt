@@ -26,7 +26,6 @@ import io.github.axisangles.ktmath.EulerOrder
 import io.github.axisangles.ktmath.Quaternion
 import io.github.axisangles.ktmath.Vector3
 import org.apache.commons.lang3.ArrayUtils
-import org.apache.commons.lang3.tuple.Pair
 import java.io.File
 import java.util.*
 import java.util.concurrent.CopyOnWriteArrayList
@@ -565,6 +564,14 @@ class AutoBoneHandler(private val server: VRServer) {
 					if (useAdjustmentsForBvh) {
 						autoBoneResults.configValues.forEach { (key: SkeletonConfigOffsets, newLength: Float?) ->
 							streamer.humanPoseManager.setOffset(key, newLength)
+						}
+						for (calib in autoBoneResults.trackerCalibs) {
+							val tracker = streamer.trackerFramesPlayer.playerTrackers.find { it.tracker.trackerPosition == calib.tracker } ?: continue
+							tracker.mounting = calib.mounting
+							tracker.w = calib.w
+							tracker.x = calib.x
+							tracker.y = calib.y
+							tracker.z = calib.z
 						}
 					}
 					for (offset in BoneType.values) {

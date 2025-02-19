@@ -60,22 +60,22 @@ class AutoBone(private val server: VRServer) {
 		),
 	)
 	val leftTrackers = mapOf(
-		Pair(TrackerPosition.NECK, BoneType.NECK),
-		Pair(TrackerPosition.UPPER_CHEST, BoneType.UPPER_CHEST),
-		Pair(TrackerPosition.CHEST, BoneType.CHEST),
-		Pair(TrackerPosition.WAIST, BoneType.WAIST),
-		Pair(TrackerPosition.HIP, BoneType.HIP),
-		Pair(TrackerPosition.LEFT_UPPER_LEG, BoneType.LEFT_UPPER_LEG),
-		Pair(TrackerPosition.LEFT_LOWER_LEG, BoneType.LEFT_LOWER_LEG),
+		Pair(TrackerPosition.NECK, arrayOf(BoneType.NECK)),
+		Pair(TrackerPosition.UPPER_CHEST, arrayOf(BoneType.UPPER_CHEST)),
+		Pair(TrackerPosition.CHEST, arrayOf(BoneType.CHEST)),
+		Pair(TrackerPosition.WAIST, arrayOf(BoneType.WAIST)),
+		Pair(TrackerPosition.HIP, arrayOf(BoneType.HIP, BoneType.LEFT_HIP)),
+		Pair(TrackerPosition.LEFT_UPPER_LEG, arrayOf(BoneType.LEFT_UPPER_LEG)),
+		Pair(TrackerPosition.LEFT_LOWER_LEG, arrayOf(BoneType.LEFT_LOWER_LEG)),
 	)
 	val rightTrackers = mapOf(
-		Pair(TrackerPosition.NECK, BoneType.NECK),
-		Pair(TrackerPosition.UPPER_CHEST, BoneType.UPPER_CHEST),
-		Pair(TrackerPosition.CHEST, BoneType.CHEST),
-		Pair(TrackerPosition.WAIST, BoneType.WAIST),
-		Pair(TrackerPosition.HIP, BoneType.HIP),
-		Pair(TrackerPosition.RIGHT_UPPER_LEG, BoneType.RIGHT_UPPER_LEG),
-		Pair(TrackerPosition.RIGHT_LOWER_LEG, BoneType.RIGHT_LOWER_LEG),
+		Pair(TrackerPosition.NECK, arrayOf(BoneType.NECK)),
+		Pair(TrackerPosition.UPPER_CHEST, arrayOf(BoneType.UPPER_CHEST)),
+		Pair(TrackerPosition.CHEST, arrayOf(BoneType.CHEST)),
+		Pair(TrackerPosition.WAIST, arrayOf(BoneType.WAIST)),
+		Pair(TrackerPosition.HIP, arrayOf(BoneType.HIP, BoneType.RIGHT_HIP)),
+		Pair(TrackerPosition.RIGHT_UPPER_LEG, arrayOf(BoneType.RIGHT_UPPER_LEG)),
+		Pair(TrackerPosition.RIGHT_LOWER_LEG, arrayOf(BoneType.RIGHT_LOWER_LEG)),
 	)
 
 	var estimatedHeight: Float = 1f
@@ -391,11 +391,29 @@ class AutoBone(private val server: VRServer) {
 			throw AutoBoneException("The final epoch error value (${trainingStep.errorStats.mean}) has exceeded the maximum allowed value (${config.maxFinalError}).")
 		}
 
+		val calibs = FastList<TrackerCalibration>()
+		for (tracker in trainingStep.framePlayer1.playerTrackers) {
+			val tp = tracker.tracker.trackerPosition
+			if (tp == null || !adjustTrackers.contains(tp)) continue
+
+			calibs.add(
+				TrackerCalibration(
+					tp,
+					tracker.mounting,
+					tracker.w,
+					tracker.x,
+					tracker.y,
+					tracker.z,
+				),
+			)
+		}
+
 		return AutoBoneResults(
 			estimatedHeight,
 			trainingStep.targetHmdHeight,
 			trainingStep.errorStats,
 			offsets,
+			calibs,
 		)
 	}
 
@@ -532,6 +550,15 @@ class AutoBone(private val server: VRServer) {
 		val changedVals: BooleanArray,
 	)
 
+	data class TrackerCalibration(
+		val tracker: TrackerPosition,
+		val mounting: Float,
+		val w: Float,
+		val x: Float,
+		val y: Float,
+		val z: Float,
+	)
+
 	private fun internalIter(trainingStep: AutoBoneStep) {
 		// Pull frequently used variables out of trainingStep to reduce call length
 		val skeleton1 = trainingStep.skeleton1
@@ -626,36 +653,37 @@ class AutoBone(private val server: VRServer) {
 			}
 
 			// Find matching tracker on the second skeleton
-			val tracker2 = trainingStep.framePlayer2.playerTrackers.firstOrNull { it.tracker.trackerPosition == tp } ?: continue
+			val tracker2 = trainingStep.framePlayer2.playerTrackers.find { it.tracker.trackerPosition == tp } ?: continue
 
-			val lBone: Float? = slideLUnit?.let { slideL ->
+			var dot = 0f
+			var dotCount = 0
+
+			slideLUnit?.let { slideL ->
 				leftTrackers[tp]?.let {
-					val off = getBoneLocalTailDir(skeleton1, skeleton2, it)
-					val vec = off.first
-					if (vec != null) {
-						slideL.dot(vec) * off.second * slideLLen
-					} else {
-						null
+					for (bone in it) {
+						val off = getBoneLocalTailDir(skeleton1, skeleton2, bone)
+						val vec = off.first
+						if (vec != null) {
+							dot += slideL.dot(vec)
+							dotCount += 1
+						}
 					}
 				}
 			}
-			val rBone: Float? = slideRUnit?.let { slideR ->
+			slideRUnit?.let { slideR ->
 				rightTrackers[tp]?.let {
-					val off = getBoneLocalTailDir(skeleton1, skeleton2, it)
-					val vec = off.first
-					if (vec != null) {
-						slideR.dot(vec) * off.second * slideRLen
-					} else {
-						null
+					for (bone in it) {
+						val off = getBoneLocalTailDir(skeleton1, skeleton2, bone)
+						val vec = off.first
+						if (vec != null) {
+							dot += slideR.dot(vec)
+							dotCount += 1
+						}
 					}
 				}
 			}
-			val dot = if (lBone != null && rBone != null) {
-				(lBone + rBone) / 2f
-			} else {
-				lBone ?: rBone ?: continue
-			}
-			val paramAdj = adjustVal * abs(dot)
+
+			val paramAdj = adjustVal * abs(dot / dotCount)
 
 			val trackerChange = TrackerAdjustments(
 				tracker1,
@@ -958,6 +986,7 @@ class AutoBone(private val server: VRServer) {
 		val targetHeight: Float,
 		val epochError: StatsCalculator,
 		val configValues: EnumMap<SkeletonConfigOffsets, Float>,
+		val trackerCalibs: FastList<TrackerCalibration>,
 	) {
 		val heightDifference: Float
 			get() = abs(targetHeight - finalHeight)
