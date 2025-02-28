@@ -429,7 +429,7 @@ class TrackerResetsHandler(val tracker: Tracker) {
 	private fun makeIdentityAdjustmentQuatsFull() {
 		val sensorRotation = tracker.getRawRotation()
 		attachmentFixNoMounting = fixAttachment(sensorRotation)
-		yawFixZeroReference = Quaternion.IDENTITY
+		yawFixZeroReference = fixGyroscope(sensorRotation)
 	}
 
 	private fun makeIdentityAdjustmentQuatsYaw() {
