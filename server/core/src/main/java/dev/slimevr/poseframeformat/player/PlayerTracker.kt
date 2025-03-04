@@ -103,14 +103,14 @@ class PlayerTracker(
 
 		val rotation = frame.tryGetRotation()
 		if (rotation != null) {
-			if (internalMounting != 0f || internalY != 0f) {
+			if (internalMounting != 0f || w != 1f || x != 0f || y != 0f || z != 0f) {
 				val mountOffset = Quaternion(1f - abs(internalMounting), 0f, internalMounting, 0f).unit()
-				val gyroFix = if (w != 0f || x != 0f || y != 0f || z != 0f) {
+				val attachmentFix = if (w != 0f || x != 0f || y != 0f || z != 0f) {
 					Quaternion(internalW, internalX, internalY, internalZ).unit()
 				} else {
 					Quaternion.IDENTITY
 				}
-				tracker.setRotation(gyroFix * (mountOffset.inv() * (rotation * mountOffset)))
+				tracker.setRotation(mountOffset.inv() * (rotation * attachmentFix * mountOffset))
 			} else {
 				tracker.setRotation(rotation)
 			}

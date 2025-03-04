@@ -485,7 +485,7 @@ class AutoBone(private val server: VRServer) {
 				if (!adjustTrackers.contains(tracker.cal.pos)) {
 					continue
 				}
-				LogManager.info("[AutoBone] Tracker [${tracker.cal.pos}] mounting: ${tracker.cal.mounting}, gyro fix: {w: ${tracker.cal.w}, x: ${tracker.cal.x}, y: ${tracker.cal.y}, z: ${tracker.cal.z}}")
+				LogManager.info("[AutoBone] Tracker [${tracker.cal.pos}] mounting: ${tracker.cal.mounting}, attachment fix: {w: ${tracker.cal.w}, x: ${tracker.cal.x}, y: ${tracker.cal.y}, z: ${tracker.cal.z}}")
 			}
 		}
 
@@ -529,6 +529,9 @@ class AutoBone(private val server: VRServer) {
 
 	val trackerParams = arrayOf(
 		TrackerParam.MOUNTING,
+		TrackerParam.W,
+		TrackerParam.X,
+		TrackerParam.Z,
 	)
 
 	data class TrackerAdjustments(
@@ -549,7 +552,7 @@ class AutoBone(private val server: VRServer) {
 			track.mounting = mounting
 		}
 
-		fun applyGyro(track: PlayerTracker) {
+		fun applyAttachment(track: PlayerTracker) {
 			track.w = w
 			track.x = x
 			track.y = y
@@ -650,7 +653,6 @@ class AutoBone(private val server: VRServer) {
 		val slideRUnit: Vector3? = if (slideRLen > MIN_SLIDE_DIST) slideR / slideRLen else null
 
 		// Try adjusting tracker parameters
-		val trackerChanges = FastList<TrackerAdjustments>()
 		for (adj in trainingStep.trackerAdj) {
 			if (trainingStep.curEpoch < 0) {
 				break
@@ -695,8 +697,8 @@ class AutoBone(private val server: VRServer) {
 
 			for ((i, param) in trackerParams.withIndex()) {
 				if (i > 0) {
-					adj.cal.applyGyro(tracker1)
-					adj.cal.applyGyro(tracker2)
+					adj.cal.applyAttachment(tracker1)
+					adj.cal.applyAttachment(tracker2)
 				} else {
 					adj.cal.applyMount(tracker1)
 					adj.cal.applyMount(tracker2)
